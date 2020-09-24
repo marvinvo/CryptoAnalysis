@@ -27,7 +27,7 @@ public class ReporterHelper{
 	 * {@link Integer} number of errors
 	 * @return report {@link String} of the analysis
 	 */
-	public static String generateReport(List<CrySLRule> rules, Collection<IAnalysisSeed> objects, 
+	public static String generateReport(Collection<CrySLRule> rules, Collection<IAnalysisSeed> objects, 
 			List<IAnalysisSeed> secureObjects, Table<SootClass, SootMethod, Set<AbstractError>> errorMarkers, 
 			Map<Class, Integer> errorMarkerCount){
 		String report = "";
