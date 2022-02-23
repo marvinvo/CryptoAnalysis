@@ -90,6 +90,7 @@ public class ConstraintSolver {
 		this.allConstraints = this.classSpec.getRule().getConstraints();
 		for (ISLConstraint cons : allConstraints) {
 
+			// to check if all varnames can be resolved
 			Set<String> involvedVarNames = cons.getInvolvedVarNames();
 			for (CallSiteWithParamIndex cwpi : this.parameterAnalysisQuerySites) {
 				involvedVarNames.remove(cwpi.getVarName());
@@ -120,6 +121,14 @@ public class ConstraintSolver {
 		this.reporter = crySLResultsReporter;
 	}
 
+	/**
+	 * This method will convert CrySLConstraints (for now only of REQUIRED section) to AlternativeReqPredicates.
+	 * In instance, the AlternativeReqPredicates will replace the logical or operator in CrySLConstraints.
+	 * 
+	 * @param cons
+	 * @param alt
+	 * @return
+	 */
 	private ISLConstraint collectAlternativePredicates(CrySLConstraint cons, AlternativeReqPredicate alt) {
 		CrySLPredicate right = (CrySLPredicate) cons.getRight();
 		if (alt == null) {

@@ -429,22 +429,31 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	 * @return
 	 */
 	private boolean checkPredicates(Collection<ISLConstraint> relConstraints) {
+		
+		// get the required predicates
 		List<ISLConstraint> requiredPredicates = Lists.newArrayList();
 		for (ISLConstraint con : constraintSolver.getRequiredPredicates()) {
 			if (!ConstraintSolver.predefinedPreds.contains((con instanceof RequiredCrySLPredicate) ? ((RequiredCrySLPredicate) con).getPred().getPredName()
 					: ((AlternativeReqPredicate) con).getAlternatives().get(0).getPredName())) {
+				// TODO predefined preds could be in alternatives anyways and will be checked at the method end
 				requiredPredicates.add(con);
 			}
 		}
 		Set<ISLConstraint> remainingPredicates = Sets.newHashSet(requiredPredicates);
+		
 		missingPredicates.removeAll(remainingPredicates);
 
+		//
+		// Check if the right side of a constraint is fulfilled
+		//
 		for (ISLConstraint pred : requiredPredicates) {
 			if (pred instanceof RequiredCrySLPredicate) {
 				RequiredCrySLPredicate reqPred = (RequiredCrySLPredicate) pred;
 				if (reqPred.getPred().isNegated()) {
 					for (EnsuredCrySLPredicate ensPred : ensuredPredicates) {
 						if (ensPred.getPredicate().equals(reqPred.getPred())) {
+							// a predicate is ensured, that is required to be not ensured.
+							// TODO equals method will only check if predicates have the same name, not same parameter.
 							return false;
 						}
 					}
@@ -452,6 +461,8 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				} else {
 					for (EnsuredCrySLPredicate ensPred : ensuredPredicates) {
 						if (ensPred.getPredicate().equals(reqPred.getPred()) && doPredsMatch(reqPred.getPred(), ensPred)) {
+							// a predicate is ensured, that is required to be ensured.
+							// hence it can be removed from missing predicates
 							remainingPredicates.remove(pred);
 						}
 					}
@@ -459,25 +470,36 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			} else {
 				AlternativeReqPredicate alt = (AlternativeReqPredicate) pred;
 				List<CrySLPredicate> alternatives = alt.getAlternatives();
-				boolean satisfied = false;
+				
+				// holds all negated alternative preds
 				List<CrySLPredicate> negatives = alternatives.parallelStream().filter(e -> e.isNegated()).collect(Collectors.toList());
 				
 				if (negatives.size() == alternatives.size()) {
+					// all alternatives are negated
 					for (EnsuredCrySLPredicate ensPred : ensuredPredicates) {
 						if (alternatives.parallelStream().anyMatch(e -> e.getPredName().equals(ensPred.getPredicate().getPredName()))) {
+							// TODO alternatives are for example: 
+							// !pred1 OR !pred2
+							// so alternatives would hold [pred1, pred2]
+							// Hence it should not return false when only some of the preds are ensured, as long as one is not.
+							// It should return false, if and only if **ALL** preds are ensured.
 							return false;
 						}
 					}
 					remainingPredicates.remove(pred);
 				} else if (negatives.isEmpty()) {
+					// all alternatives are not negated
 					for (EnsuredCrySLPredicate ensPred : ensuredPredicates) {
 						if (alternatives.parallelStream().anyMatch(e -> ensPred.getPredicate().equals(e) && doPredsMatch(e, ensPred))) {
+							// any of the alternatives is ensured, hence it can be removed from missing required preds
 							remainingPredicates.remove(pred);
 							break;
 						}
 					}
 				} else {
+					// there are some negated and some non-negated preds
 					boolean neg = true;
+					boolean satisfied = false;
 
 					for (EnsuredCrySLPredicate ensPred : ensuredPredicates) {
 						if (negatives.parallelStream().anyMatch(e -> e.equals(ensPred.getPredicate()))) {
@@ -498,15 +520,22 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			}
 		}
 
+		// evaluate conditions for remaining preds.
+		// if the condition is not fulfilled, the pred has to be neither.
+		// hence it could be removed from missing pred list.
 		for (ISLConstraint rem : Lists.newArrayList(remainingPredicates)) {
 			if (rem instanceof RequiredCrySLPredicate) {
 				RequiredCrySLPredicate singlePred = (RequiredCrySLPredicate) rem;
 				if (evaluatePredCond(singlePred.getPred())) {
+					// condition for pred has errors, hence its constraint is fulfilled
 					remainingPredicates.remove(singlePred);
 				}
 			} else if (rem instanceof CrySLConstraint) {
 				List<CrySLPredicate> altPred = ((AlternativeReqPredicate) rem).getAlternatives();
 				if (altPred.parallelStream().anyMatch(e -> evaluatePredCond(e))) {
+					// there is one condition of an alternative pred having errors, hence the constraint is fulfilled
+					
+					// TODO imagine one pred is negated, then it should be also removed if the pred 
 					remainingPredicates.remove(rem);
 				}
 			}

@@ -2,6 +2,8 @@ package crypto.predicates;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import com.google.common.collect.HashBasedTable;
@@ -145,7 +147,7 @@ public class PredicateHandler {
 		return added;
 	}
 
-	/**
+	/**2
 	 * @return the existingPredicates
 	 */
 	public Set<EnsuredCrySLPredicate> getExistingPredicates(Statement stmt, Val seed) {
@@ -198,6 +200,8 @@ public class PredicateHandler {
 	}
 
 	public void expectPredicate(IAnalysisSeed object, Statement stmt, CrySLPredicate predToBeEnsured) {
+		Unit unit = stmt.getUnit().get();
+		List<Unit> units = cryptoScanner.icfg().getSuccsOf(unit);
 		for (Unit succ : cryptoScanner.icfg().getSuccsOf(stmt.getUnit().get())) {
 			Set<CrySLPredicate> set = expectedPredicateObjectBased.get(succ, object);
 			if (set == null)
