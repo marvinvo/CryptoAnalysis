@@ -525,7 +525,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 		this.missingPredicates.removeAll(requiredPredicates);
 		this.missingPredicates.addAll(remainingRequiredPredicates);
-		return remainingRequiredPredicates.isEmpty();
+		return remainingRequiredPredicates.isEmpty() && ensuredButRequiredNegatedPredicates.isEmpty();
 	}
 
 	private boolean evaluatePredCond(CrySLPredicate pred) {
