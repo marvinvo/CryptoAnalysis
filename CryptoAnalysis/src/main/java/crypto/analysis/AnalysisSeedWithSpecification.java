@@ -436,6 +436,9 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		
 		// get the required predicates
 		Set<ISLConstraint> requiredPredicates = Sets.newHashSet(constraintSolver.getRequiredPredicates());
+		// remove all predefined predicates, because they have dedicated errors
+		requiredPredicates.removeAll(requiredPredicates.parallelStream().filter(p -> p instanceof RequiredCrySLPredicate && ConstraintSolver.predefinedPreds.contains(((RequiredCrySLPredicate) p).getPred().getPredName())).collect(Collectors.toList()));
+		requiredPredicates.removeAll(requiredPredicates.parallelStream().filter(p -> p instanceof AlternativeReqPredicate && ConstraintSolver.predefinedPreds.contains(((AlternativeReqPredicate) p).getAlternatives().get(0).getPredName())).collect(Collectors.toList()));
 		Set<ISLConstraint> ensuredAndRequiredPredicates = Sets.newHashSet(); // holds required predicates that are already ensured
 		Set<ISLConstraint> ensuredButRequiredNegatedPredicates = Sets.newHashSet(); // holds required predicates, that are negated but ensured
 
@@ -482,13 +485,13 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				boolean anyPositiveIsEnsured = false;
 					
 				if (negatives.parallelStream().allMatch(e -> 
-					ensuredPredicates.parallelStream().anyMatch(ensPred -> e.getPredName().equals(ensPred.getPredicate().getPredName()) && doPredsParametersMatch(e, ensPred)))) {
+					ensuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred)))) {
 					// all alternative preds are ensured, but since all alternative preds are negated the constraint is not satisfied
 					allNegativesAreEnsured = true;
 				}
 					
 				if (positives.parallelStream().anyMatch(e -> 
-				ensuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred)))) {
+					ensuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred)))) {
 					// any of the alternatives is ensured, hence it can be removed from missing required preds
 					anyPositiveIsEnsured = true;
 				}
@@ -524,7 +527,10 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 
 		this.missingPredicates.removeAll(requiredPredicates);
-		this.missingPredicates.addAll(remainingRequiredPredicates);
+		if(ensuredButRequiredNegatedPredicates.isEmpty()) {
+			// that is actually a design choice
+			this.missingPredicates.addAll(remainingRequiredPredicates);
+		}
 		return remainingRequiredPredicates.isEmpty() && ensuredButRequiredNegatedPredicates.isEmpty();
 	}
 
