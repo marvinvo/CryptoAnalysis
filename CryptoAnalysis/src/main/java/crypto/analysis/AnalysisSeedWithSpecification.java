@@ -70,6 +70,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	private ExtendedIDEALAnaylsis analysis;
 	private ForwardBoomerangResults<TransitionFunction> results;
 	private Collection<EnsuredCrySLPredicate> ensuredPredicates = Sets.newHashSet();
+	private Collection<DarkPredicate> darkPredicates = Sets.newHashSet();
 	private Multimap<Statement, State> typeStateChange = HashMultimap.create();
 	private Collection<EnsuredCrySLPredicate> indirectlyEnsuredPredicates = Sets.newHashSet();
 	private Set<ISLConstraint> missingPredicates = Sets.newHashSet();
@@ -350,7 +351,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		
 		// found no specification for the given parameter type
 		AnalysisSeedWithEnsuredPredicate seed = cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(currStmt, accessGraph));
-		predicateHandler.expectPredicate(seed, currStmt, predToBeEnsured);
+		predicateHandler.expectPredicate(seed, currStmt, predToBeEnsured, this);
 		if (satisfiesConstraintSytem) {
 			seed.addEnsuredPredicate(new EnsuredCrySLPredicate(predToBeEnsured, parameterAnalysis.getCollectedValues()));
 		} else {
@@ -386,7 +387,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	 * @param satisfiesConstraintSytem
 	 */
 	private void expectPredicateWhenThisObjectIsInState(State stateNode, Statement currStmt, CrySLPredicate predToBeEnsured, boolean satisfiesConstraintSytem) {
-		predicateHandler.expectPredicate(this, currStmt, predToBeEnsured);
+		predicateHandler.expectPredicate(this, currStmt, predToBeEnsured, null);
 
 		if (!satisfiesConstraintSytem)
 			return;
@@ -435,10 +436,11 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	private boolean checkPredicates() {
 		
 		// get the required predicates
+		// and remove all predefined predicates, because they have dedicated errors
 		Set<ISLConstraint> requiredPredicates = Sets.newHashSet(constraintSolver.getRequiredPredicates());
-		// remove all predefined predicates, because they have dedicated errors
 		requiredPredicates.removeAll(requiredPredicates.parallelStream().filter(p -> p instanceof RequiredCrySLPredicate && ConstraintSolver.predefinedPreds.contains(((RequiredCrySLPredicate) p).getPred().getPredName())).collect(Collectors.toList()));
 		requiredPredicates.removeAll(requiredPredicates.parallelStream().filter(p -> p instanceof AlternativeReqPredicate && ConstraintSolver.predefinedPreds.contains(((AlternativeReqPredicate) p).getAlternatives().get(0).getPredName())).collect(Collectors.toList()));
+		
 		Set<ISLConstraint> ensuredAndRequiredPredicates = Sets.newHashSet(); // holds required predicates that are already ensured
 		Set<ISLConstraint> ensuredButRequiredNegatedPredicates = Sets.newHashSet(); // holds required predicates, that are negated but ensured
 
@@ -481,6 +483,8 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				List<CrySLPredicate> negatives = positives.parallelStream().filter(e -> e.isNegated()).collect(Collectors.toList()); // holds all negated alternative preds
 				positives.removeAll(negatives);
 				
+				// condition => !pred1
+				
 				boolean allNegativesAreEnsured = false;
 				boolean anyPositiveIsEnsured = false;
 					
@@ -507,6 +511,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		// Check if remaining predicates are satisfied nevertheless, because their condition does not hold
 		//
 		
+		// TODO ensured but required negated preds with an invalid condition should be removed from their list
 		Set<ISLConstraint> remainingRequiredPredicates = Sets.newHashSet(requiredPredicates);
 		remainingRequiredPredicates.removeAll(ensuredAndRequiredPredicates);
 		
@@ -519,6 +524,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				}
 			} else if (rem instanceof CrySLConstraint) {
 				List<CrySLPredicate> altPred = ((AlternativeReqPredicate) rem).getAlternatives();
+				// TODO the pred's condition could also be a pred, but for now, evaluatePredCond() will only check for satisfied constraints
 				if (altPred.parallelStream().anyMatch(e -> evaluatePredCond(e))) {
 					// there is one condition of an alternative pred having errors, hence it is fulfilled
 					remainingRequiredPredicates.remove(rem);
@@ -528,7 +534,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 		this.missingPredicates.removeAll(requiredPredicates);
 		if(ensuredButRequiredNegatedPredicates.isEmpty()) {
-			// that is actually a design choice
+			// that is actually a design choice?
 			this.missingPredicates.addAll(remainingRequiredPredicates);
 		}
 		return remainingRequiredPredicates.isEmpty() && ensuredButRequiredNegatedPredicates.isEmpty();
@@ -651,7 +657,9 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	public void addEnsuredPredicate(EnsuredCrySLPredicate ensPred) {
-		if (ensuredPredicates.add(ensPred)) {
+		if(ensPred instanceof DarkPredicate && darkPredicates.add((DarkPredicate) ensPred)
+				|| ensuredPredicates.add(ensPred)) {
+			// ensPred was added to darkPredicates or to ensuredPredicates
 			for (Entry<Statement, State> e : typeStateChange.entries())
 				onAddedTypestateChange(e.getKey(), e.getValue());
 		}

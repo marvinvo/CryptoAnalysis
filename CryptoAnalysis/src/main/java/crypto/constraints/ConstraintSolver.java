@@ -109,6 +109,9 @@ public class ConstraintSolver {
 				} else if (cons instanceof CrySLConstraint) {
 					ISLConstraint right = ((CrySLConstraint) cons).getRight();
 					if (right instanceof CrySLPredicate && !predefinedPreds.contains(((CrySLPredicate) right).getPredName())) {
+						// by design, the non-predefined preds can only appear in REQUIRES section.
+						// further, expressions in REQUIRES are connected with a logical or
+						// and expressions may only be an implication in form of ((Constraint|Pred) =>)? Pred
 						requiredPredicates.add(collectAlternativePredicates((CrySLConstraint) cons, null));
 					} else {
 						relConstraints.add(cons);
@@ -122,7 +125,7 @@ public class ConstraintSolver {
 	}
 
 	/**
-	 * This method will convert CrySLConstraints (for now only of REQUIRED section) to AlternativeReqPredicates.
+	 * This method will convert CrySLConstraints to AlternativeReqPredicates.
 	 * In instance, the AlternativeReqPredicates will replace the logical or operator in CrySLConstraints.
 	 * 
 	 * @param cons

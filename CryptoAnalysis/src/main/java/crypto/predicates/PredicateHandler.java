@@ -1,6 +1,7 @@
 package crypto.predicates;
 
 import java.util.AbstractMap.SimpleEntry;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.collect.Table.Cell;
@@ -124,7 +126,7 @@ public class PredicateHandler {
 
 	private final Table<Statement, Val, Set<EnsuredCrySLPredicate>> existingPredicates = HashBasedTable.create();
 	private final Table<Statement, IAnalysisSeed, Set<EnsuredCrySLPredicate>> existingPredicatesObjectBased = HashBasedTable.create();
-	private final Table<Statement, IAnalysisSeed, Set<CrySLPredicate>> expectedPredicateObjectBased = HashBasedTable.create();
+	private final Table<Statement, IAnalysisSeed, Map<CrySLPredicate, Set<IAnalysisSeed>>> expectedPredicateObjectBased = HashBasedTable.create();
 	private final CryptoScanner cryptoScanner;
 
 	public PredicateHandler(CryptoScanner cryptoScanner) {
@@ -199,22 +201,30 @@ public class PredicateHandler {
 		}
 	}
 
-	public void expectPredicate(IAnalysisSeed object, Statement stmt, CrySLPredicate predToBeEnsured) {
+	public void expectPredicate(IAnalysisSeed expectedOn, Statement stmt, CrySLPredicate predToBeEnsured, IAnalysisSeed expectedFrom) {
 		Unit unit = stmt.getUnit().get();
 		List<Unit> units = cryptoScanner.icfg().getSuccsOf(unit);
 		for (Unit succ : cryptoScanner.icfg().getSuccsOf(stmt.getUnit().get())) {
-			Set<CrySLPredicate> set = expectedPredicateObjectBased.get(succ, object);
-			if (set == null)
-				set = Sets.newHashSet();
-			set.add(predToBeEnsured);
-			expectedPredicateObjectBased.put(new Statement((Stmt) succ, stmt.getMethod()), object, set);
+			Map<CrySLPredicate, Set<IAnalysisSeed>> map = expectedPredicateObjectBased.get(succ, expectedOn);
+			if (map == null)
+				map = Maps.newHashMap();
+			if(expectedFrom != null) {
+				Set<IAnalysisSeed> setOfExpecties = map.get(predToBeEnsured);
+				if(setOfExpecties == null) {
+					setOfExpecties = Sets.newHashSet();
+				}
+				setOfExpecties.add(expectedFrom);
+				map.put(predToBeEnsured, setOfExpecties);
+			}
+			expectedPredicateObjectBased.put(new Statement((Stmt) succ, stmt.getMethod()), expectedOn, map);
 		}
 	}
 
 	public void checkPredicates() {
 		checkMissingRequiredPredicates();
 		checkForContradictions();
-		cryptoScanner.getAnalysisListener().ensuredPredicates(this.existingPredicates, expectedPredicateObjectBased, computeMissingPredicates());
+		computeMissingPredicates();
+		//cryptoScanner.getAnalysisListener().ensuredPredicates(this.existingPredicates, expectedPredicateObjectBased, computeMissingPredicates());
 	}
 
 	private void checkMissingRequiredPredicates() {
@@ -225,6 +235,8 @@ public class PredicateHandler {
 					reportMissingPred(seed, (RequiredCrySLPredicate) pred);
 				} else if (pred instanceof CrySLConstraint) {
 					for (CrySLPredicate altPred : ((AlternativeReqPredicate) pred).getAlternatives()) {
+						// TODO create a dedicated error for alternative predicates
+						// they are connected with a logical or -> the error should point that out
 						reportMissingPred(seed, new RequiredCrySLPredicate(altPred, altPred.getLocation()));
 					}
 				}
@@ -269,13 +281,13 @@ public class PredicateHandler {
 		}
 	}
 
-	private Table<Statement, IAnalysisSeed, Set<CrySLPredicate>> computeMissingPredicates() {
-		Table<Statement, IAnalysisSeed, Set<CrySLPredicate>> res = HashBasedTable.create();
-		for (Cell<Statement, IAnalysisSeed, Set<CrySLPredicate>> c : expectedPredicateObjectBased.cellSet()) {
+	private Table<Statement, IAnalysisSeed, Map<CrySLPredicate, Set<IAnalysisSeed>>> computeMissingPredicates() {
+		Table<Statement, IAnalysisSeed, Map<CrySLPredicate, Set<IAnalysisSeed>>> res = HashBasedTable.create();
+		for (Cell<Statement, IAnalysisSeed, Map<CrySLPredicate, Set<IAnalysisSeed>>> c : expectedPredicateObjectBased.cellSet()) {
 			Set<EnsuredCrySLPredicate> exPreds = existingPredicatesObjectBased.get(c.getRowKey(), c.getColumnKey());
 			if (c.getValue() == null)
 				continue;
-			HashSet<CrySLPredicate> expectedPreds = new HashSet<>(c.getValue());
+			Map<CrySLPredicate, Set<IAnalysisSeed>> expectedPreds = Maps.newHashMap(c.getValue());
 			if (exPreds == null) {
 				exPreds = Sets.newHashSet();
 			}
