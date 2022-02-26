@@ -1,12 +1,16 @@
 package crypto.predicates;
 
 import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
+
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -20,10 +24,13 @@ import crypto.analysis.AlternativeReqPredicate;
 import crypto.analysis.AnalysisSeedWithSpecification;
 import crypto.analysis.ClassSpecification;
 import crypto.analysis.CryptoScanner;
+import crypto.analysis.DarkPredicate;
 import crypto.analysis.EnsuredCrySLPredicate;
 import crypto.analysis.IAnalysisSeed;
 import crypto.analysis.RequiredCrySLPredicate;
 import crypto.analysis.ResultsHandler;
+import crypto.analysis.errors.AbstractError;
+import crypto.analysis.errors.ErrorWithObjectAllocation;
 import crypto.analysis.errors.PredicateContradictionError;
 import crypto.analysis.errors.RequiredPredicateError;
 import crypto.extractparameter.CallSiteWithExtractedValue;
@@ -32,6 +39,7 @@ import crypto.interfaces.ISLConstraint;
 import crypto.rules.CrySLConstraint;
 import crypto.rules.CrySLPredicate;
 import crypto.rules.CrySLRule;
+import soot.SootClass;
 import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
@@ -126,7 +134,7 @@ public class PredicateHandler {
 
 	private final Table<Statement, Val, Set<EnsuredCrySLPredicate>> existingPredicates = HashBasedTable.create();
 	private final Table<Statement, IAnalysisSeed, Set<EnsuredCrySLPredicate>> existingPredicatesObjectBased = HashBasedTable.create();
-	private final Table<Statement, IAnalysisSeed, Map<CrySLPredicate, Set<IAnalysisSeed>>> expectedPredicateObjectBased = HashBasedTable.create();
+	private final Table<Statement, IAnalysisSeed, Set<CrySLPredicate>> expectedPredicateObjectBased = HashBasedTable.create();
 	private final CryptoScanner cryptoScanner;
 
 	public PredicateHandler(CryptoScanner cryptoScanner) {
@@ -205,26 +213,21 @@ public class PredicateHandler {
 		Unit unit = stmt.getUnit().get();
 		List<Unit> units = cryptoScanner.icfg().getSuccsOf(unit);
 		for (Unit succ : cryptoScanner.icfg().getSuccsOf(stmt.getUnit().get())) {
-			Map<CrySLPredicate, Set<IAnalysisSeed>> map = expectedPredicateObjectBased.get(succ, expectedOn);
-			if (map == null)
-				map = Maps.newHashMap();
+			Set<CrySLPredicate> set = expectedPredicateObjectBased.get(succ, expectedOn);
+			if (set == null)
+				set = Sets.newHashSet();
 			if(expectedFrom != null) {
-				Set<IAnalysisSeed> setOfExpecties = map.get(predToBeEnsured);
-				if(setOfExpecties == null) {
-					setOfExpecties = Sets.newHashSet();
-				}
-				setOfExpecties.add(expectedFrom);
-				map.put(predToBeEnsured, setOfExpecties);
+				set.add(predToBeEnsured);
 			}
-			expectedPredicateObjectBased.put(new Statement((Stmt) succ, stmt.getMethod()), expectedOn, map);
+			expectedPredicateObjectBased.put(new Statement((Stmt) succ, stmt.getMethod()), expectedOn, set);
 		}
 	}
 
 	public void checkPredicates() {
 		checkMissingRequiredPredicates();
 		checkForContradictions();
-		computeMissingPredicates();
-		//cryptoScanner.getAnalysisListener().ensuredPredicates(this.existingPredicates, expectedPredicateObjectBased, computeMissingPredicates());
+		buildUpSubsequentErrorStack();
+		cryptoScanner.getAnalysisListener().ensuredPredicates(this.existingPredicates, expectedPredicateObjectBased, computeMissingPredicates());
 	}
 
 	private void checkMissingRequiredPredicates() {
@@ -243,14 +246,138 @@ public class PredicateHandler {
 			}
 		}
 	}
+	
+	private Map<AbstractError, Set<AbstractError>> buildUpSubsequentErrorStack() {
+		Set<AbstractError> rootErrors = Sets.newHashSet();
+		Map<AbstractError, Set<AbstractError>> childErrorToParentErrors = Maps.newHashMap();
+		Map<Class, Integer> errorCount = new HashMap<Class, Integer>();
+		int subSequentErrorsCount = 0;
+		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
+			for (AbstractError e: seed.getErrors()) {
+				Integer count = errorCount.get(e.getClass());
+				if(count == null) {
+					errorCount.put(e.getClass(), 1);
+				} else {
+					count++;
+					errorCount.put(e.getClass(), count);
+				}
+				if(!(e instanceof RequiredPredicateError)) {
+					// error has to be a root error
+					rootErrors.add(e);
+					childErrorToParentErrors.put(e, null);
+				}
+				else {
+					Set<ISLConstraint> missingPredicatesWithDarkPreds = seed.getMissingPredicatesWithDarkPreds();
+					RequiredPredicateError error = (RequiredPredicateError) e;
+					if(missingPredicatesWithDarkPreds.contains(error.getContradictedPredicate())) {
+						// error is root error, since the required predicate can also not be generated with dark preds
+						rootErrors.add(e);
+						childErrorToParentErrors.put(e, null);
+					}
+					else {
+						// subsequent error
+						subSequentErrorsCount++;
+						
+						// TODO first filter, which dark preds are used to ensure required preds
+						
+						// now find previous errors
+						Set<IAnalysisSeed> seedsThatEnsureDarkPreds = seed.getDarkPredicates().parallelStream().map(darkPred -> darkPred.getRoot()).collect(Collectors.toSet());
+		
+						
+						for(IAnalysisSeed parentSeedWithErrors: seedsThatEnsureDarkPreds) {
+							for(AbstractError parentError: parentSeedWithErrors.getErrors()) {
+								if(parentError == e) {
+									continue;
+								}
+								Set<AbstractError> parentErrors = childErrorToParentErrors.get(parentError);
+								if(parentErrors == null) {
+									parentErrors = Sets.newHashSet();
+								}
+								parentErrors.add(e);
+								childErrorToParentErrors.put(parentError, parentErrors);
+							}
+						}
+						
+						
+					}
+					 
+					
+				}
+			}
+		}
+		String result = printSubsequentErrors(0, rootErrors, childErrorToParentErrors);
+		result += getErrorStats(errorCount, subSequentErrorsCount);
+		System.out.print(result);
+		return childErrorToParentErrors;
+	}
+	
+	private String getErrorStats(Map<Class, Integer> errorCount, int subSequentErrorsCount) {
+		
+		String result = "================================ CryptoAnalysis Summary ===================================\n";
+		if(errorCount.isEmpty()) {
+			result +=   "\tNo violation of any of the rules found.\n";
+		}
+		else {
+			result +=   "\n\tCryptoAnalysis found the following violations. For details see description above.\n\n";
+			for(Entry<Class, Integer> e : errorCount.entrySet()){
+				result += String.format("\t%s: %s\n", e.getKey().getSimpleName(),e.getValue());
+			}
+			
+			result +=   "\n\t" + subSequentErrorsCount + " Required Predicate Errors are subsequent (caused by other errors)";
+		}
+		result +=       "\n\n===========================================================================================";
+		return result;
+	}
+	
+	private String printSubsequentErrors(int level, Collection<AbstractError> errors, Map<AbstractError, Set<AbstractError>> childErrorToParentErrors) {
+		if(level > 20 || errors == null) {
+			return "";
+		}
+		String report = "";
+		String tabs = "";
+		for(int i=0; i<level; i++) {
+			tabs += "\t";
+		}
+		if(level > 0) {
+			report += tabs + "This error causes the following other errors: \n\n";
+		}
+		for(AbstractError e: errors) {
+			report += getErrorString(e, tabs);
+			report += printSubsequentErrors(level+2, childErrorToParentErrors.get(e), childErrorToParentErrors);
+		}
+		return report;
+		
+	}
+	
+	private String getErrorString(AbstractError e, String tabs) {
+		String report = "";
+		String className = e.getErrorLocation().getMethod().getClass().getName();
+		String method = e.getErrorLocation().getMethod().getSubSignature();
+		String statement = e.getErrorLocation().getUnit().get().toString();
+		String errorString = e.toErrorMarkerString();
+		String errorClass = e.getClass().getSimpleName();
+		String errorViolatingRule = e.getRule().getClassName();
+		String object = "";
+		if(e instanceof ErrorWithObjectAllocation) {
+			object = tabs + String.format("(on Object #%s)\n", ((ErrorWithObjectAllocation) e).getObjectLocation().getObjectId());
+		}
+		report += tabs + "In Class " + className + " in Method: " + method + "\n";
+		report += tabs + "At statement: " + statement + "\n";
+		report += tabs + String.format("%s violating CrySL rule for %s \n", errorClass, errorViolatingRule);
+		report += object;
+		report += tabs + errorString + "\n";
+		report += "\n";
+		return report;
+	}
 
 	private void reportMissingPred(AnalysisSeedWithSpecification seed, RequiredCrySLPredicate missingPred) {
 		CrySLRule rule = seed.getSpec().getRule();
 		if (!rule.getPredicates().parallelStream().anyMatch(e -> missingPred.getPred().getPredName().equals(e.getPredName()) && missingPred.getPred().getParameters().get(0).equals(e.getParameters().get(0)))) {
 			for (CallSiteWithParamIndex v : seed.getParameterAnalysis().getAllQuerySites()) {
 				if (missingPred.getPred().getInvolvedVarNames().contains(v.getVarName()) && v.stmt().equals(missingPred.getLocation())) {
-					cryptoScanner.getAnalysisListener().reportError(seed,
-							new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(v, null)));
+					RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(v, null));
+					seed.addError(e);
+					cryptoScanner.getAnalysisListener().reportError(seed, e);
 				}
 			}
 		}
@@ -281,13 +408,13 @@ public class PredicateHandler {
 		}
 	}
 
-	private Table<Statement, IAnalysisSeed, Map<CrySLPredicate, Set<IAnalysisSeed>>> computeMissingPredicates() {
-		Table<Statement, IAnalysisSeed, Map<CrySLPredicate, Set<IAnalysisSeed>>> res = HashBasedTable.create();
-		for (Cell<Statement, IAnalysisSeed, Map<CrySLPredicate, Set<IAnalysisSeed>>> c : expectedPredicateObjectBased.cellSet()) {
+	private Table<Statement, IAnalysisSeed, Set<CrySLPredicate>> computeMissingPredicates() {
+		Table<Statement, IAnalysisSeed, Set<CrySLPredicate>> res = HashBasedTable.create();
+		for (Cell<Statement, IAnalysisSeed, Set<CrySLPredicate>> c : expectedPredicateObjectBased.cellSet()) {
 			Set<EnsuredCrySLPredicate> exPreds = existingPredicatesObjectBased.get(c.getRowKey(), c.getColumnKey());
 			if (c.getValue() == null)
 				continue;
-			Map<CrySLPredicate, Set<IAnalysisSeed>> expectedPreds = Maps.newHashMap(c.getValue());
+			Set<CrySLPredicate> expectedPreds = Sets.newHashSet(c.getValue());
 			if (exPreds == null) {
 				exPreds = Sets.newHashSet();
 			}

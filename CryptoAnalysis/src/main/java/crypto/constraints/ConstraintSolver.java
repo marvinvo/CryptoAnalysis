@@ -187,6 +187,7 @@ public class ConstraintSolver {
 					break;
 				} else {
 					fail++;
+					this.object.addError(e);
 					reporter.reportError(object, e);
 				}
 			}

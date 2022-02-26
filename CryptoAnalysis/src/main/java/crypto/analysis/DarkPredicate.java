@@ -7,11 +7,17 @@ import crypto.extractparameter.ExtractedValue;
 import crypto.rules.CrySLPredicate;
 
 public class DarkPredicate extends EnsuredCrySLPredicate {
+	
+	private IAnalysisSeed root;
 
 	public DarkPredicate(CrySLPredicate predicate,
-			Multimap<CallSiteWithParamIndex, ExtractedValue> parametersToValues2) {
+			Multimap<CallSiteWithParamIndex, ExtractedValue> parametersToValues2, IAnalysisSeed root) {
 		super(predicate, parametersToValues2);
-		// TODO Auto-generated constructor stub
+		this.root = root;
+	}
+
+	public IAnalysisSeed getRoot() {
+		return root;
 	}
 
 }
