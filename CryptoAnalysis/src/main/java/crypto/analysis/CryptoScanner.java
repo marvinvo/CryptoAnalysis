@@ -75,8 +75,8 @@ public abstract class CryptoScanner {
 		analysisWatch = Stopwatch.createStarted();
 		logger.info("Searching for seeds for the analysis!");
 		initialize();
-		long elapsed = analysisWatch.elapsed(TimeUnit.SECONDS);
-		logger.info("Discovered " + worklist.size() + " analysis seeds within " + elapsed + " seconds!");
+		long elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Discovered " + worklist.size() + " analysis seeds within " + elapsed + " milliseconds!");
 		while (!worklist.isEmpty()) {
 			IAnalysisSeed curr = worklist.poll();
 			listener.discoveredSeed(curr);
@@ -85,6 +85,9 @@ public abstract class CryptoScanner {
 			listener.addProgress(processedSeeds,worklist.size());
 			estimateAnalysisTime();
 		}
+		
+		elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Analysis without predicate checks took " + elapsed + " milliseconds!");
 
 //		IDebugger<TypestateDomainValue<StateNode>> debugger = debugger();
 //		if (debugger instanceof CryptoVizDebugger) {
@@ -92,6 +95,9 @@ public abstract class CryptoScanner {
 //			ideVizDebugger.addEnsuredPredicates(this.existingPredicates);
 //		}
 		predicateHandler.checkPredicates();
+		
+		elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Analysis with predicate checks took " + elapsed + " milliseconds!");
 
 		for (AnalysisSeedWithSpecification seed : getAnalysisSeeds()) {
 			if (seed.isSecure()) {
@@ -101,7 +107,7 @@ public abstract class CryptoScanner {
 		
 		listener.afterAnalysis();
 		elapsed = analysisWatch.elapsed(TimeUnit.SECONDS);
-		logger.info("Static Analysis took " + elapsed + " seconds!");
+		logger.info("Static Analysis took " + elapsed + " milliseconds!");
 //		debugger().afterAnalysis();
 	}
 
