@@ -9,6 +9,7 @@ import crypto.rules.CrySLPredicate;
 public class DarkPredicate extends EnsuredCrySLPredicate {
 	
 	private IAnalysisSeed root;
+	private boolean isAllowedToBecomeEnsured = true;
 
 	public DarkPredicate(CrySLPredicate predicate,
 			Multimap<CallSiteWithParamIndex, ExtractedValue> parametersToValues2, IAnalysisSeed root) {
@@ -18,6 +19,14 @@ public class DarkPredicate extends EnsuredCrySLPredicate {
 
 	public IAnalysisSeed getRoot() {
 		return root;
+	}
+	
+	public void setUnallowedToBecomeEnsured() {
+		isAllowedToBecomeEnsured = false;
+	}
+	
+	public boolean isAllowedToBecomeEnsured() {
+		return isAllowedToBecomeEnsured;
 	}
 
 }

@@ -57,7 +57,7 @@ public class ReporterHelper{
 			for (Entry<SootMethod, Set<AbstractError>> e : errorMarkers.row(c).entrySet()) {
 				report += String.format("\n\t in Method: %s\n", e.getKey().getSubSignature());
 				for (AbstractError marker : e.getValue()) {
-					report += String.format("\t\t%s violating CrySL rule for %s", marker.getClass().getSimpleName() ,marker.getRule().getClassName());
+					report += String.format("\t\t%s violating CrySL rule for %s", marker.getRootErrors().isEmpty() ? marker.getClass().getSimpleName() : "Subsequent " + marker.getClass().getSimpleName(), marker.getRule().getClassName());
 					if(marker instanceof ErrorWithObjectAllocation) {
 						report += String.format(" (on Object #%s)\n", ((ErrorWithObjectAllocation) marker).getObjectLocation().getObjectId());
 					} else {
@@ -65,6 +65,14 @@ public class ReporterHelper{
 					}
 					report += String.format("\t\t\t%s\n", marker.toErrorMarkerString());
 					report += String.format("\t\t\tat statement: %s\n\n", marker.getErrorLocation().getUnit().get());
+					if(!marker.getSubsequentErrors().isEmpty()) {
+						report += "\t\t\tThis error will cause violations in\n";
+						for(AbstractError err: marker.getSubsequentErrors()) {
+							report += String.format("\t\t\t\t (%s) %s @ %s\n", err.getClass().getSimpleName(), err.getErrorLocation().getMethod().getSubSignature(), marker.getErrorLocation().getUnit().get());
+							report += String.format("\t\t\t\t\t%s\n", err.toErrorMarkerString());
+						}
+						report += "\n";
+					}
 				}
 			}
 			report += "\n";

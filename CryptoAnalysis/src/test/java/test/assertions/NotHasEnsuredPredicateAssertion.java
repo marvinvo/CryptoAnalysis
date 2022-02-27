@@ -1,6 +1,7 @@
 package test.assertions;
 
 import boomerang.jimple.Val;
+import crypto.analysis.DarkPredicate;
 import crypto.analysis.EnsuredCrySLPredicate;
 import soot.jimple.Stmt;
 import test.Assertion;
@@ -36,7 +37,7 @@ public class NotHasEnsuredPredicateAssertion implements Assertion {
 	}
 
 	public void reported(Val value, EnsuredCrySLPredicate pred) {
-		if(value.equals(val)){
+		if(value.equals(val) && !(pred instanceof DarkPredicate)){
 			imprecise = true;
 		}
 	}

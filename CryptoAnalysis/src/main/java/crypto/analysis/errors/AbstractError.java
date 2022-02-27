@@ -1,5 +1,10 @@
 package crypto.analysis.errors;
 
+import java.util.Collection;
+import java.util.Set;
+
+import com.google.common.collect.Sets;
+
 import boomerang.jimple.Statement;
 import crypto.rules.CrySLRule;
 import soot.jimple.internal.JAssignStmt;
@@ -12,6 +17,9 @@ public abstract class AbstractError implements IError{
 	private final String outerMethod;
 	private final String invokeMethod;
 	private final String declaringClass;
+	
+	private Set<AbstractError> causedByErrors = Sets.newHashSet(); // root
+	private Set<AbstractError> willCauseErrors = Sets.newHashSet(); // subsequent
 
 	public AbstractError(Statement errorLocation, CrySLRule rule) {
 		this.errorLocation = errorLocation;
@@ -29,6 +37,26 @@ public abstract class AbstractError implements IError{
 		else {
 			this.invokeMethod = ((JAssignStmt) errorLocation.getUnit().get()).getLeftOp().toString();
 		}	
+	}
+	
+	public void addCausingError(AbstractError parent) {
+		causedByErrors.add(parent);
+	}
+	
+	public void addCausingError(Collection<AbstractError> parents) {
+		causedByErrors.addAll(parents);
+	}
+	
+	public void addSubsequentError(AbstractError subsequentError) {
+		willCauseErrors.add(subsequentError);
+	}
+	
+	public Set<AbstractError> getSubsequentErrors(){
+		return this.willCauseErrors;
+	}
+	
+	public Set<AbstractError> getRootErrors(){
+		return this.causedByErrors;
 	}
 
 	public Statement getErrorLocation() {

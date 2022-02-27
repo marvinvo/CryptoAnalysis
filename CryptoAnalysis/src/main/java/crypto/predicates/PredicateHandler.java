@@ -210,8 +210,6 @@ public class PredicateHandler {
 	}
 
 	public void expectPredicate(IAnalysisSeed expectedOn, Statement stmt, CrySLPredicate predToBeEnsured, IAnalysisSeed expectedFrom) {
-		Unit unit = stmt.getUnit().get();
-		List<Unit> units = cryptoScanner.icfg().getSuccsOf(unit);
 		for (Unit succ : cryptoScanner.icfg().getSuccsOf(stmt.getUnit().get())) {
 			Set<CrySLPredicate> set = expectedPredicateObjectBased.get(succ, expectedOn);
 			if (set == null)
@@ -226,13 +224,13 @@ public class PredicateHandler {
 	public void checkPredicates() {
 		checkMissingRequiredPredicates();
 		checkForContradictions();
-		buildUpSubsequentErrorStack();
+		setSubsequentAndRootErrorsForEachError();
 		cryptoScanner.getAnalysisListener().ensuredPredicates(this.existingPredicates, expectedPredicateObjectBased, computeMissingPredicates());
 	}
 
 	private void checkMissingRequiredPredicates() {
 		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
-			Set<ISLConstraint> missingPredicates = seed.getMissingPredicates();
+			Collection<ISLConstraint> missingPredicates = seed.getMissingPredicates();
 			for (ISLConstraint pred : missingPredicates) {
 				if (pred instanceof RequiredCrySLPredicate) {
 					reportMissingPred(seed, (RequiredCrySLPredicate) pred);
@@ -241,6 +239,32 @@ public class PredicateHandler {
 						// TODO create a dedicated error for alternative predicates
 						// they are connected with a logical or -> the error should point that out
 						reportMissingPred(seed, new RequiredCrySLPredicate(altPred, altPred.getLocation()));
+					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * This method is the logic behind adding subsequent child errors and causing parent errors to each error.
+	 * The subsequent and parent errors are stored by each error itself.
+	 */
+	private void setSubsequentAndRootErrorsForEachError() {
+		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
+			Collection<ISLConstraint> missingPredicatesWithDarkPreds = seed.getMissingPredicatesWithDarkPreds();
+			Collection<DarkPredicate> usedDarkPreds = seed.getNeededDarkPreds();
+			for (AbstractError e: seed.getErrors()) {
+				if(e instanceof RequiredPredicateError) {
+					// only RequiredPredicateError can be a subsequent error
+					RequiredPredicateError error = (RequiredPredicateError) e;
+					if(missingPredicatesWithDarkPreds.isEmpty() || !missingPredicatesWithDarkPreds.contains(error.getContradictedPredicate())) {
+						// this errors predicate was ensured with dark predicates
+						// hence the error is subsequent
+						Collection<DarkPredicate> darkPredsThatEnsureMissingPredicate = usedDarkPreds.parallelStream().filter(p -> p.getPredicate().equals(error.getContradictedPredicate())).collect(Collectors.toSet());
+						// connect parent errors with this error
+						Collection<AbstractError> parentErrors = darkPredsThatEnsureMissingPredicate.parallelStream().flatMap(pred -> pred.getRoot().getErrors().stream()).collect(Collectors.toSet());
+						error.addCausingError(parentErrors);
+						parentErrors.parallelStream().forEach(parentErr -> parentErr.addSubsequentError(error));
 					}
 				}
 			}
@@ -267,7 +291,7 @@ public class PredicateHandler {
 					childErrorToParentErrors.put(e, null);
 				}
 				else {
-					Set<ISLConstraint> missingPredicatesWithDarkPreds = seed.getMissingPredicatesWithDarkPreds();
+					Collection<ISLConstraint> missingPredicatesWithDarkPreds = seed.getMissingPredicatesWithDarkPreds();
 					RequiredPredicateError error = (RequiredPredicateError) e;
 					if(missingPredicatesWithDarkPreds.contains(error.getContradictedPredicate())) {
 						// error is root error, since the required predicate can also not be generated with dark preds
@@ -275,26 +299,29 @@ public class PredicateHandler {
 						childErrorToParentErrors.put(e, null);
 					}
 					else {
-						// subsequent error
-						subSequentErrorsCount++;
-						
-						// TODO first filter, which dark preds are used to ensure required preds
-						
 						// now find previous errors
-						Set<IAnalysisSeed> seedsThatEnsureDarkPreds = seed.getDarkPredicates().parallelStream().map(darkPred -> darkPred.getRoot()).collect(Collectors.toSet());
-		
+						Set<IAnalysisSeed> seedsThatEnsureDarkPreds = seed.getNeededDarkPreds().parallelStream().map(darkPred -> darkPred.getRoot()).collect(Collectors.toSet());
+						if(seedsThatEnsureDarkPreds.isEmpty()) {
+							// no dark preds available that cause errors in the seed
+							// hence error is caused due to other errors in the seed
+							childErrorToParentErrors.put(e, null);
+						}
+						else {
+							// subsequent error
+							subSequentErrorsCount++;
 						
-						for(IAnalysisSeed parentSeedWithErrors: seedsThatEnsureDarkPreds) {
-							for(AbstractError parentError: parentSeedWithErrors.getErrors()) {
-								if(parentError == e) {
-									continue;
+							for(IAnalysisSeed parentSeedWithErrors: seedsThatEnsureDarkPreds) {
+								for(AbstractError parentError: parentSeedWithErrors.getErrors()) {
+									if(parentError == e) {
+										continue;
+									}
+									Set<AbstractError> parentErrors = childErrorToParentErrors.get(parentError);
+									if(parentErrors == null) {
+										parentErrors = Sets.newHashSet();
+									}
+									parentErrors.add(e);
+									childErrorToParentErrors.put(parentError, parentErrors);
 								}
-								Set<AbstractError> parentErrors = childErrorToParentErrors.get(parentError);
-								if(parentErrors == null) {
-									parentErrors = Sets.newHashSet();
-								}
-								parentErrors.add(e);
-								childErrorToParentErrors.put(parentError, parentErrors);
 							}
 						}
 						
