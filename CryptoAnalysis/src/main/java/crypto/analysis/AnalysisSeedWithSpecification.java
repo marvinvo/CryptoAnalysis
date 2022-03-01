@@ -497,7 +497,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 	/**
 	 * This method will cause side effects on @missingPredicates, @missingPredicatesWithDarkPreds and @usedDarkPreds .
-	 * It will add predicates to these lists.
+	 * It will store predicates in these lists.
 	 * @param existingEnsuredPredicates
 	 * @param existingDarkPredicates
 	 */
@@ -656,7 +656,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				requiredPredicatesExist = false;
 			}
 		}
-		return pred.isNegated() != requiredPredicatesExist;
+		return requiredPredicatesExist;
 	}
 
 	private Collection<String> retrieveValueFromUnit(CallSiteWithParamIndex cswpi, Collection<ExtractedValue> collection) {
@@ -718,9 +718,11 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	public void addEnsuredPredicate(EnsuredCrySLPredicate ensPred) {
-		if((ensPred instanceof DarkPredicate && darkPredicates.add((DarkPredicate) ensPred))
-			|| (!(ensPred instanceof DarkPredicate) && ensuredPredicates.add(ensPred))) {
-			// ensPred was added to darkPredicates or to ensuredPredicates
+		if((ensPred instanceof DarkPredicate && darkPredicates.add((DarkPredicate) ensPred))){
+			// do nothing
+		}
+		else if(!(ensPred instanceof DarkPredicate) && ensuredPredicates.add(ensPred)) {
+			// ensPred was added to ensuredPredicates
 			for (Entry<Statement, State> e : typeStateChange.entries())
 				onAddedTypestateChange(e.getKey(), e.getValue());
 		}
