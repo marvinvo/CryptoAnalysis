@@ -161,6 +161,9 @@ public class ConstraintSolver {
 				}
 			}
 		}
+		if(pred.getParameters().stream().anyMatch(param -> param.getName().equals("this"))) {
+			return new RequiredCrySLPredicate(pred, object.stmt());
+		}
 		return null;
 	}
 

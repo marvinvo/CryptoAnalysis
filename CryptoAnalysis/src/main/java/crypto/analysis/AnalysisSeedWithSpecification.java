@@ -74,7 +74,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	private Collection<DarkPredicate> neededDarkPreds = null;
 	private Multimap<Statement, State> typeStateChange = HashMultimap.create();
 	private Collection<EnsuredCrySLPredicate> indirectlyEnsuredPredicates = Sets.newHashSet();
-	private Set<ISLConstraint> missingPredicates = null;
+	private Set<ISLConstraint> missingPredicates = Sets.newHashSet();
 	private Set<ISLConstraint> missingPredicatesWithDarkPreds = null;
 	private ConstraintSolver constraintSolver;
 	private boolean internalConstraintSatisfied;
@@ -132,6 +132,20 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				// TODO only maintain indirectly ensured predicate as long as they are not
 				// killed by the rule
 				predicateHandler.addNewPred(this, c.getRowKey(), c.getColumnKey(), pred);
+				// TODO: this should be done better
+				// create dublicated version for this parameter
+				if(pred.getPredicate().getParameters().stream().anyMatch(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()))) {
+					EnsuredCrySLPredicate dublicate;
+					List<ICrySLPredicateParameter> params = pred.getPredicate().getParameters().stream().map(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()) ? new CrySLObject("this", "null") : p).collect(Collectors.toList());
+			
+					if(pred instanceof DarkPredicate) {
+						dublicate = new DarkPredicate(new CrySLPredicate(params.get(0), pred.getPredicate().getPredName(), params, false), pred.getParametersToValues(), ((DarkPredicate) pred).getRoot());
+					}
+					else {
+						dublicate = new EnsuredCrySLPredicate(new CrySLPredicate(params.get(0), pred.getPredicate().getPredName(), params, false), pred.getParametersToValues());
+					}
+					this.addEnsuredPredicate(dublicate);
+				}
 			}
 		}
 
@@ -338,6 +352,8 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	 * @param satisfiesConstraintSytem
 	 */
 	private void expectPredicateOnOtherObject(Statement currStmt, Val accessGraph, EnsuredCrySLPredicate ensPred) {
+		
+		boolean matched = false;
 		// check, if parameter is of a type with specification rules
 		if (accessGraph.value() != null) {
 			Type baseType = accessGraph.value().getType();
@@ -349,19 +365,44 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 						AnalysisSeedWithSpecification seed = cryptoScanner.getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(cryptoScanner, currStmt, accessGraph, spec));
 						seed.addEnsuredPredicateFromOtherRule(ensPred);
 						// we could return here, because both class specifications and parameter reference should be unique regarding their types
-						return;
+						if(!(ensPred instanceof DarkPredicate)) {
+							matched = true;
+						}
 					}
 				}
 			}
 		}
-		// found no specification for the given parameter type
-		AnalysisSeedWithEnsuredPredicate seed = cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(currStmt, accessGraph));
-		predicateHandler.expectPredicate(seed, currStmt, ensPred.getPredicate(), this);
-		seed.addEnsuredPredicate(ensPred);
+		if(!matched) {
+			// found no specification for the given parameter type
+			AnalysisSeedWithEnsuredPredicate seed = cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(currStmt, accessGraph));
+			predicateHandler.expectPredicate(seed, currStmt, ensPred.getPredicate(), this);
+			seed.addEnsuredPredicate(ensPred);
+			if(ensPred instanceof DarkPredicate) {
+				this.missingPredicates.add(new RequiredCrySLPredicate(ensPred.getPredicate(), currStmt));
+			}
+		}
+		
 	}
 
 	private void addEnsuredPredicateFromOtherRule(EnsuredCrySLPredicate ensuredCrySLPredicate) {
 		indirectlyEnsuredPredicates.add(ensuredCrySLPredicate);
+		
+		// TODO: this should be done better
+		// create dublicated version for this parameter
+		if(ensuredCrySLPredicate.getPredicate().getParameters().stream().anyMatch(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()))) {
+			EnsuredCrySLPredicate dublicate;
+			List<ICrySLPredicateParameter> params = ensuredCrySLPredicate.getPredicate().getParameters().stream().map(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()) ? new CrySLObject("this", "null") : p).collect(Collectors.toList());
+	
+			if(ensuredCrySLPredicate instanceof DarkPredicate) {
+				dublicate = new DarkPredicate(new CrySLPredicate(params.get(0), ensuredCrySLPredicate.getPredicate().getPredName(), params, false), ensuredCrySLPredicate.getParametersToValues(), ((DarkPredicate) ensuredCrySLPredicate).getRoot());
+			}
+			else {
+				dublicate = new EnsuredCrySLPredicate(new CrySLPredicate(params.get(0), ensuredCrySLPredicate.getPredicate().getPredName(), params, false), ensuredCrySLPredicate.getParametersToValues());
+			}
+			ensuredCrySLPredicate = dublicate;
+			this.addEnsuredPredicate(dublicate);
+		}
+		
 		if (results == null)
 			// this seed haven't been processed yet
 			return;
@@ -432,6 +473,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		requiredPredicates.removeAll(requiredPredicates.parallelStream()
 				.filter(p -> (p instanceof RequiredCrySLPredicate && ConstraintSolver.predefinedPreds.contains(((RequiredCrySLPredicate) p).getPred().getPredName()))
 				|| (p instanceof AlternativeReqPredicate && ConstraintSolver.predefinedPreds.contains(((AlternativeReqPredicate) p).getAlternatives().get(0).getPredName()))).collect(Collectors.toList()));
+		//requiredPredicates.addAll(this.missingPredicates);
 		return requiredPredicates;
 	}
 	
@@ -612,15 +654,23 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			return true;
 		}
 	}
+	
+	private boolean doPredsMatch(CrySLPredicate pred, EnsuredCrySLPredicate ensPred) {
+		//
+		return true;
+	}
 
 	private boolean doPredsParametersMatch(CrySLPredicate pred, EnsuredCrySLPredicate ensPred) {
 		boolean requiredPredicatesExist = true;
 		for (int i = 0; i < pred.getParameters().size(); i++) {
 			String var = pred.getParameters().get(i).getName();
 			if (isOfNonTrackableType(var)) {
+				if(var.equals("this") && !ensPred.getPredicate().getParameters().get(i).getName().equals("this")) {
+					return false;
+				}
 				continue;
 			} else if (pred.getInvolvedVarNames().contains(var)) {
-
+				
 				final String parameterI = ensPred.getPredicate().getParameters().get(i).getName();
 				Collection<String> actVals = Collections.emptySet();
 				Collection<String> expVals = Collections.emptySet();

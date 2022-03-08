@@ -691,6 +691,7 @@ public class CrySLModelReader {
 	private CrySLPredicate extractReqPred(final ReqPred pred) {
 		final List<ICrySLPredicateParameter> variables = new ArrayList<>();
 		PredLit innerPred = (PredLit) pred;
+		
 		EObject cons = innerPred.getCons();
 		ISLConstraint conditional = null;
 		if (cons instanceof Constraint) {
@@ -699,6 +700,8 @@ public class CrySLModelReader {
 			conditional = getPredicate((Pred) cons);
 		}
 		if (innerPred.getPred().getParList() != null) {
+			// TODO: add method to crysl supar that return, wether it is "this" or "_" or not
+			boolean isthis = innerPred.getPred().getParList().getParameters().size() != 1;
 			for (final SuPar var : innerPred.getPred().getParList().getParameters()) {
 				if (var.getVal() != null) {
 					final LiteralExpression lit = var.getVal();
@@ -727,8 +730,15 @@ public class CrySLModelReader {
 						}
 					}
 				} else {
-					variables.add(new CrySLObject(UNDERSCORE, NULL));
+					if(isthis) {
+						variables.add(new CrySLObject(THIS, NULL));
+					}
+					else {
+						variables.add(new CrySLObject(UNDERSCORE, NULL));
+					}
 				}
+				//this can only be at first position
+				isthis = false;
 			}
 		}
 		return new CrySLPredicate(null, innerPred.getPred().getPredName(), variables, (innerPred.getNot() != null ? true : false), conditional);
