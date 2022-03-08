@@ -231,6 +231,7 @@ public class CryptoGuardTest extends AbstractHeadlessTest {
 	
 	@Test
 	public void predictablePBEPasswordExamples() {
+		CryptoGuardTest.setReportFormat(null);
 		String mavenProjectPath = new File("../CryptoAnalysisTargets/CryptoGuardExamples/predictablepbepassword").getAbsolutePath();
 		MavenProject mavenProject = createAndCompile(mavenProjectPath);
 		HeadlessCryptoScanner scanner = createScanner(mavenProject);

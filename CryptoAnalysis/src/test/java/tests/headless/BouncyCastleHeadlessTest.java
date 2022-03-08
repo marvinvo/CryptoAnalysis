@@ -16,9 +16,11 @@ import tests.headless.FindingsType.FalseNegatives;
 import tests.headless.FindingsType.TruePositives;
 
 public class BouncyCastleHeadlessTest extends AbstractHeadlessTest {
+	
 	@Ignore
 	@Test
 	public void testBCMacExamples() {
+		
 		String mavenProjectPath = new File("../CryptoAnalysisTargets/BCMacExamples").getAbsolutePath();
 		MavenProject mavenProject = createAndCompile(mavenProjectPath);
 		HeadlessCryptoScanner scanner = createScanner(mavenProject, Ruleset.BouncyCastle);
@@ -105,6 +107,7 @@ public class BouncyCastleHeadlessTest extends AbstractHeadlessTest {
 	
 	@Test
 	public void testBCEllipticCurveExamples() {
+		BouncyCastleHeadlessTest.setReportFormat(null);
 		String mavenProjectPath = new File("../CryptoAnalysisTargets/BCEllipticCurveExamples").getAbsolutePath();
 		MavenProject mavenProject = createAndCompile(mavenProjectPath);
 		HeadlessCryptoScanner scanner = createScanner(mavenProject, Ruleset.BouncyCastle);
