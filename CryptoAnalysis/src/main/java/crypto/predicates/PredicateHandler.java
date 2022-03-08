@@ -222,9 +222,9 @@ public class PredicateHandler {
 	}
 
 	public void checkPredicates() {
+		setSubsequentAndRootErrorsForEachError();
 		checkMissingRequiredPredicates();
 		checkForContradictions();
-		setSubsequentAndRootErrorsForEachError();
 		cryptoScanner.getAnalysisListener().ensuredPredicates(this.existingPredicates, expectedPredicateObjectBased, computeMissingPredicates());
 	}
 
