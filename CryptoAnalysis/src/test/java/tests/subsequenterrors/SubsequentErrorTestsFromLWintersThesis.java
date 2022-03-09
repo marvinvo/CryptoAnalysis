@@ -123,6 +123,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 
 		//Create and initialize cipher object
 		Cipher cipher = Cipher.getInstance("AES");
+		Assertions.createsARootError();
 		cipher.init(Cipher.ENCRYPT_MODE, secretKey);
 
 		// encrypt
@@ -148,10 +149,12 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		//######################################################
 
 		IvParameterSpec iv = new IvParameterSpec(ivBytes);
+		Assertions.createsARootError();
 
 		//Create and initialize cipher object
 		Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
 		cipher.init(Cipher.ENCRYPT_MODE, secretKey, iv);
+		Assertions.createsASubsequentError();
 
 		// encrypt
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
@@ -165,6 +168,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		//Create and initialize cipher object
 		Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
 		cipher.init(Cipher.ENCRYPT_MODE, test.generateKey(), test.generateIV());
+		Assertions.createsASubsequentError();
 
 		// encrypt
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
@@ -183,7 +187,9 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		
 		public IvParameterSpec generateIV(){
 			byte[] ivBytes = new byte[]{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
-			return new IvParameterSpec(ivBytes);
+			IvParameterSpec spec = new IvParameterSpec(ivBytes);
+			Assertions.createsARootError();
+			return spec;
 		}
 	}
 	
@@ -196,19 +202,22 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 
 		RSAPrivateKeySpec privateSpec = new RSAPrivateKeySpec(modulus, privateExponent);
 		RSAPublicKeySpec publicSpec = new RSAPublicKeySpec(modulus, publicExponent);
-
+		
+		// TODO: shouldn't be more errors here?
 
 		//java.security.KeyFactory
 		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
 		PrivateKey privateKey = keyFactory.generatePrivate(privateSpec);
 		PublicKey publicKey = keyFactory.generatePublic(publicSpec);
-
+		
 		//java.security.KeyPair
 		KeyPair keyPair = new KeyPair(publicKey, privateKey);
 
 		//javax.crypto.Cipher
 		Cipher cipher = Cipher.getInstance("RSA");
 		cipher.init(Cipher.ENCRYPT_MODE, keyPair.getPrivate());
+		Assertions.createsARootError();
+		
 
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
 		byte[] cipherText = cipher.doFinal(plainText);
@@ -237,11 +246,14 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		
 		//CogniCryt_SAST reports an error in the next line saying that the key size is chosen inappropriately. 
 		keygen.init(46);
+		Assertions.createsARootError();
 		SecretKey key = keygen.generateKey();
+		
 		Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
 		
 		//CogniCryt_SAST reports an error in the next line as the key flowing to this Cipher usage was not generated securely. 
 		c.init(Cipher.ENCRYPT_MODE, key);
+		Assertions.createsASubsequentError();
 		byte[] encText = c.doFinal("".getBytes());
 	}
 	
@@ -249,10 +261,13 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 	public void random() throws NoSuchAlgorithmException {
 		byte[] seed = new byte[]{1,3,3,7};
 		SecureRandom secureRandom = new SecureRandom(seed);
+		Assertions.createsARootError();
 		//SecureRandom secureRandom = new SecureRandom();
 		
 		KeyGenerator keyGen = KeyGenerator.getInstance("AES");
 		keyGen.init(secureRandom);
+		Assertions.createsASubsequentError();
+		
 		
 		SecretKey key = keyGen.generateKey();
 	}
@@ -278,6 +293,10 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		// encrypt
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
 		byte[] cipherText = cipher.doFinal(plainText);
+		
+		Assertions.predicateErrors(0);
+		Assertions.constraintErrors(0);
+		Assertions.typestateErrors(0);
 	}
 	
 	@Test
@@ -287,6 +306,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		
 		Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
 		cipher.init(Cipher.ENCRYPT_MODE, keyProvider.generateKey(), ivProvider.generateIV());
+		Assertions.createsASubsequentError();
 		
 		//encrypt
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
@@ -306,7 +326,9 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 	public class IVProvider{
 		public IvParameterSpec generateIV() {
 			byte[] ivBytes = new byte[]{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
-			return new IvParameterSpec(ivBytes);
+			IvParameterSpec spec = new IvParameterSpec(ivBytes);
+			Assertions.createsARootError();
+			return spec;
 		}
 	}
 	
