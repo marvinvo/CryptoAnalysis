@@ -62,9 +62,11 @@ import sync.pds.solver.nodes.Node;
 import test.assertions.Assertions;
 import test.assertions.CallToForbiddenMethodAssertion;
 import test.assertions.ConstraintErrorCountAssertion;
+import test.assertions.CreatesARootErrorAssertion;
 import test.assertions.ExtractedValueAssertion;
 import test.assertions.HasEnsuredPredicateAssertion;
 import test.assertions.InAcceptingStateAssertion;
+import test.assertions.CreatesASubsequentErrorAssertion;
 import test.assertions.MissingTypestateChange;
 import test.assertions.NoMissingTypestateChange;
 import test.assertions.NotHasEnsuredPredicateAssertion;
@@ -123,6 +125,16 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 							
 							@Override
 							public void reportError(AbstractError error) {
+								for(Assertion a: expectedResults) {
+									if(a instanceof CreatesASubsequentErrorAssertion){
+										CreatesASubsequentErrorAssertion errorCountAssertion = (CreatesASubsequentErrorAssertion) a;
+										errorCountAssertion.addError(error);
+									}
+									if(a instanceof CreatesARootErrorAssertion){
+										CreatesARootErrorAssertion errorCountAssertion = (CreatesARootErrorAssertion) a;
+										errorCountAssertion.addError(error);
+									}
+								}
 								error.accept(new ErrorVisitor() {
 									
 									@Override
@@ -467,6 +479,16 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 			if(invocationName.startsWith("noMissingTypestateChange")){
 				for(Unit pred : getPredecessorsNotBenchmark(stmt))
 					queries.add(new NoMissingTypestateChange((Stmt) pred));
+			}
+			
+			if(invocationName.startsWith("createsASubsequentError")){
+				for(Unit pred : getPredecessorsNotBenchmark(stmt))
+					queries.add(new CreatesASubsequentErrorAssertion((Stmt) pred));
+			}
+			
+			if(invocationName.startsWith("createsARootError")){
+				for(Unit pred : getPredecessorsNotBenchmark(stmt))
+					queries.add(new CreatesARootErrorAssertion((Stmt) pred));
 			}
 			
 			if(invocationName.startsWith("predicateErrors")){	

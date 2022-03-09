@@ -36,6 +36,18 @@ public class Assertions {
 	public static void notHasEnsuredPredicate(Object o){
 		
 	}
+	
+	public static void createsASubsequentError() {
+		
+	}
+	
+	public static void willLeadToSubsequentErrors() {
+		
+	}
+	
+	public static void createsARootError() {
+		
+	}
 
     public static void missingTypestateChange() {
     }

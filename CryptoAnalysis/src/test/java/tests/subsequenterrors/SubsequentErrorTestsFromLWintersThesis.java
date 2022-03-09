@@ -37,16 +37,25 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 
 	@Test
 	public void constraintErrorTest() throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, UnsupportedEncodingException, IllegalBlockSizeException, BadPaddingException{
-			//java.security.KeyGenerator
+			// Check for subsequent and root errors
 			KeyGenerator keyGenerator = KeyGenerator.getInstance("DES");
+			Assertions.createsARootError();
+			
 			SecretKey key = keyGenerator.generateKey();
 
-			//javax.crypto.Cipher
 			Cipher cipher = Cipher.getInstance("DES");
+			Assertions.createsARootError();
+			
 			cipher.init(Cipher.ENCRYPT_MODE, key);
+			Assertions.createsASubsequentError();
 
 			byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
 			byte[] cipherText = cipher.doFinal(plainText);
+			
+			
+			// double check if matches errors counts
+			Assertions.constraintErrors(2);
+			Assertions.predicateErrors(1);
 	}
 	
 	/**
@@ -58,6 +67,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 	public void incompleteOperationErrorExample() throws NoSuchAlgorithmException, NoSuchPaddingException, GeneralSecurityException {
 		Signature instance = Signature.getInstance("SHA256withRSA");
 		instance.initSign(IncompleteOperationErrorExample.getPrivateKey());
+		Assertions.createsASubsequentError();
 		instance.update("test".getBytes());
 		/**
 		 * The following call is missing, therefore the Signature object is never actually used to compute a Signature.
@@ -77,6 +87,8 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		private void doInit() throws GeneralSecurityException {
 			signature = Signature.getInstance("SHA256withRSA");
 			signature.initSign(getPrivateKey());
+			Assertions.createsASubsequentError();
+			
 		}
 
 		private void doUpate() throws GeneralSecurityException {
@@ -93,6 +105,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		private static PrivateKey getPrivateKey() throws GeneralSecurityException {
 			KeyPairGenerator kpgen = KeyPairGenerator.getInstance("RSA");
 			kpgen.initialize(1028);
+			Assertions.createsARootError();
 			KeyPair gp = kpgen.generateKeyPair();
 			return gp.getPrivate();
 		}
