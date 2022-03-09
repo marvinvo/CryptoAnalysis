@@ -37,6 +37,7 @@ import crypto.extractparameter.CallSiteWithExtractedValue;
 import crypto.extractparameter.CallSiteWithParamIndex;
 import crypto.interfaces.ISLConstraint;
 import crypto.rules.CrySLConstraint;
+import crypto.rules.CrySLObject;
 import crypto.rules.CrySLPredicate;
 import crypto.rules.CrySLRule;
 import soot.SootClass;
@@ -222,9 +223,9 @@ public class PredicateHandler {
 	}
 
 	public void checkPredicates() {
-		setSubsequentAndRootErrorsForEachError();
 		checkMissingRequiredPredicates();
 		checkForContradictions();
+		setSubsequentAndRootErrorsForEachError();
 		cryptoScanner.getAnalysisListener().ensuredPredicates(this.existingPredicates, expectedPredicateObjectBased, computeMissingPredicates());
 	}
 
@@ -406,6 +407,12 @@ public class PredicateHandler {
 					seed.addError(e);
 					cryptoScanner.getAnalysisListener().reportError(seed, e);
 				}
+			}
+			// TODO Refactor
+			if(missingPred.getPred().getParameters().stream().anyMatch(param -> param instanceof CrySLObject && ((CrySLObject) param).getName().equals("this"))) {
+				RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(new CallSiteWithParamIndex(missingPred.getLocation(), null, 0, "this"), null));
+				seed.addError(e);
+				//cryptoScanner.getAnalysisListener().reportError(seed, e);
 			}
 		}
 	}
