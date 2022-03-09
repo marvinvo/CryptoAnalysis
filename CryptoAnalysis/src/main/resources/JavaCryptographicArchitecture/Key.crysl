@@ -1,0 +1,13 @@
+SPEC java.security.Key
+
+OBJECTS 
+	byte[] keyMaterial;
+
+EVENTS
+	GetEnc: keyMaterial = getEncoded();
+
+ORDER
+	GetEnc*
+	
+ENSURES
+	preparedKeyMaterial[keyMaterial] after GetEnc;

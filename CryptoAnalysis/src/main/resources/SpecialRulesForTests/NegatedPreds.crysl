@@ -1,0 +1,22 @@
+SPEC java.security.SecureRandom
+
+OBJECTS 
+	byte[] seed;
+	byte[] next;
+	
+EVENTS
+	c1: SecureRandom();
+	Cons := c1;
+
+	nB: nextBytes(next);
+	Ends := nB;
+
+ORDER
+	Cons, Ends*
+ 	
+REQUIRES	
+	!test[next] || !test2[next] || !test3[next];
+	
+ENSURES
+	test[next] after Ends;
+	

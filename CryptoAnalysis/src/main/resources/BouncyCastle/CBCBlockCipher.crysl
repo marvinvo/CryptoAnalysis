@@ -1,0 +1,18 @@
+SPEC org.bouncycastle.crypto.modes.CBCBlockCipher
+
+OBJECTS
+	org.bouncycastle.crypto.BlockCipher engine;
+	
+EVENTS
+	c : CBCBlockCipher(engine);
+
+//No need to specify the order, must be wrapped in PaddedBufferedCipher!
+	
+ORDER
+	c
+
+REQUIRES
+	generatedAESEngine[engine];
+	
+ENSURES
+	generatedCBCBlockCipher[this];
