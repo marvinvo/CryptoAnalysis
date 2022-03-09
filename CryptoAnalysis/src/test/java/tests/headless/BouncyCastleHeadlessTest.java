@@ -179,7 +179,7 @@ public class BouncyCastleHeadlessTest extends AbstractHeadlessTest {
 				.withTPs(RequiredPredicateError.class, 3)
 				.build());
 		setErrorsCount(new ErrorSpecification.Builder("<transforms.ECFixedTransformTest: void testSix(java.lang.String)>")
-				.withTPs(RequiredPredicateError.class, 2)
+				.withTPs(RequiredPredicateError.class, 3)
 				.withTPs(IncompleteOperationError.class, 1)
 				.build());
 		
