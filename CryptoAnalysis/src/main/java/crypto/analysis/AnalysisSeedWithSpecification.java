@@ -74,7 +74,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	private Collection<DarkPredicate> neededDarkPreds = null;
 	private Multimap<Statement, State> typeStateChange = HashMultimap.create();
 	private Collection<EnsuredCrySLPredicate> indirectlyEnsuredPredicates = Sets.newHashSet();
-	private Set<ISLConstraint> missingPredicates = Sets.newHashSet();
+	private Set<ISLConstraint> missingPredicates = null;
 	private Set<ISLConstraint> missingPredicatesWithDarkPreds = null;
 	private ConstraintSolver constraintSolver;
 	private boolean internalConstraintSatisfied;
@@ -377,9 +377,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			AnalysisSeedWithEnsuredPredicate seed = cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(currStmt, accessGraph));
 			predicateHandler.expectPredicate(seed, currStmt, ensPred.getPredicate(), this);
 			seed.addEnsuredPredicate(ensPred);
-			if(ensPred instanceof DarkPredicate) {
-				this.missingPredicates.add(new RequiredCrySLPredicate(ensPred.getPredicate(), currStmt));
-			}
 		}
 		
 	}
@@ -473,7 +470,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		requiredPredicates.removeAll(requiredPredicates.parallelStream()
 				.filter(p -> (p instanceof RequiredCrySLPredicate && ConstraintSolver.predefinedPreds.contains(((RequiredCrySLPredicate) p).getPred().getPredName()))
 				|| (p instanceof AlternativeReqPredicate && ConstraintSolver.predefinedPreds.contains(((AlternativeReqPredicate) p).getAlternatives().get(0).getPredName()))).collect(Collectors.toList()));
-		//requiredPredicates.addAll(this.missingPredicates);
 		return requiredPredicates;
 	}
 	
