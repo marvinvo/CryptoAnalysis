@@ -262,9 +262,13 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	
 	/**
 	 * This method will trigger the whole predicate mechanism.
-	 * It ensures a predicate at each typestate change entry, if that predicate should be generated after transition of that typestate change.
+	 * It creates an ensured or dark predicate, based on constraints (CONSTRAINTS and REQUIRES) or predicate condition (condition => predToBeEnsured)
+	 * for each typestate change entry, if that predicate should be generated after transition of that typestate change.
 	 */
 	public void checkConstraintsAndEnsurePredicates() {
+		// evaluate constraints (CONSTRAINTS and REQUIRES)
+		boolean satisfiesConstraintSytem = isConstraintSystemSatisfied();
+				
 		for (CrySLPredicate predToBeEnsured : spec.getRule().getPredicates()) {
 			if (predToBeEnsured.isNegated()) {
 				// you cannot ensure negated predicates by design
@@ -272,9 +276,21 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			}
 			for (Entry<Statement, State> e : typeStateChange.entries()) {
 				if (isPredicateGeneratingState(predToBeEnsured, e.getValue())) {
-					// this is a potential location, where the predicate could be ensured
-					// further checks are done in ensuresPred method
-					ensuresPred(predToBeEnsured, e.getKey(), e.getValue());
+					// this is a potential location, where the predicate should be ensured on satisfied constraints
+					
+					// Create an ensured pred.
+					// Based on constraints or predicate condition, this will be either an EnsuredCrySLPredicate or DarkPredicate. 
+					EnsuredCrySLPredicate ensuredPred;
+					if(satisfiesConstraintSytem && predToBeEnsured.getConstraint() == null 
+					   // predicate has no condition and constraint system is satisfied
+							|| predToBeEnsured.getConstraint() != null && isPredConditionSatisfied(predToBeEnsured)) 
+							// predicate has condition and condition is satisfied 
+					{ 
+						ensuredPred = new EnsuredCrySLPredicate(predToBeEnsured, parameterAnalysis.getCollectedValues());
+					} else {
+						ensuredPred = new DarkPredicate(predToBeEnsured, parameterAnalysis.getCollectedValues(), this);
+					}
+					ensuresPred(ensuredPred, e.getKey(), e.getValue());
 				}
 			}
 		}
@@ -290,30 +306,13 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	 * @param currStmt a statement before state change
 	 * @param stateNode the next state, after execution of {@param currStmt}
 	 */
-	private void ensuresPred(CrySLPredicate predToBeEnsured, Statement currStmt, State stateNode) {
-		if (predToBeEnsured.isNegated()) {
-			// By design you cannot ensure negated predicates
-			return;
-		}
-		
-		// evaluate constraints
-		boolean satisfiesConstraintSytem = false;
-		if(predToBeEnsured.getConstraint() != null) {
-			satisfiesConstraintSytem = isPredConditionSatisfied(predToBeEnsured);
-		} else {
-			satisfiesConstraintSytem = isConstraintSystemSatisfied();
-		}
-		
-		// create EnsuredPred
-		EnsuredCrySLPredicate ensuredPred;
-		if(satisfiesConstraintSytem) {
-			ensuredPred = new EnsuredCrySLPredicate(predToBeEnsured, parameterAnalysis.getCollectedValues());
-		} else {
-			ensuredPred = new DarkPredicate(predToBeEnsured, parameterAnalysis.getCollectedValues(), this);
+	private void ensuresPred(EnsuredCrySLPredicate ensuredPred, Statement currStmt, State stateNode) {
+		if (ensuredPred.getPredicate().isNegated()) {
+			return; // By design you cannot ensure negated predicates
 		}
 		
 		// check if expect predicate when *this* object is in state
-		for (ICrySLPredicateParameter predicateParam : predToBeEnsured.getParameters()) {
+		for (ICrySLPredicateParameter predicateParam : ensuredPred.getPredicate().getParameters()) {
 			if (predicateParam.getName().equals("this")) {
 				expectPredicateWhenThisObjectIsInState(stateNode, currStmt, ensuredPred);
 			}
@@ -327,7 +326,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 			for (CrySLMethod crySLMethod : convert) {
 				Entry<String, String> retObject = crySLMethod.getRetObject();
-				if (!retObject.getKey().equals("_") && currStmt.getUnit().get() instanceof AssignStmt && predicateParameterEquals(predToBeEnsured.getParameters(), retObject.getKey())) {
+				if (!retObject.getKey().equals("_") && currStmt.getUnit().get() instanceof AssignStmt && predicateParameterEquals(ensuredPred.getPredicate().getParameters(), retObject.getKey())) {
 					AssignStmt as = (AssignStmt) currStmt.getUnit().get();
 					Value leftOp = as.getLeftOp();
 					AllocVal val = new AllocVal(leftOp, currStmt.getMethod(), as.getRightOp(), new Statement(as, currStmt.getMethod()));
@@ -335,7 +334,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				}
 				int i = 0;
 				for (Entry<String, String> p : crySLMethod.getParameters()) {
-					if (predicateParameterEquals(predToBeEnsured.getParameters(), p.getKey())) {
+					if (predicateParameterEquals(ensuredPred.getPredicate().getParameters(), p.getKey())) {
 						Value param = ie.getArg(i);
 						if (param instanceof Local) {
 							Val val = new Val(param, currStmt.getMethod());
