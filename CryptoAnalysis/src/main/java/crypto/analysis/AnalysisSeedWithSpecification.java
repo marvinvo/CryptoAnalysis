@@ -66,23 +66,30 @@ import typestate.finiteautomata.State;
 
 public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
+	// general
 	private final ClassSpecification spec;
+	private boolean secure = true;
+	// typestate
 	private ExtendedIDEALAnaylsis analysis;
 	private ForwardBoomerangResults<TransitionFunction> results;
+	protected Map<Statement, SootMethod> allCallsOnObject = Maps.newLinkedHashMap();
+	private Set<ResultsHandler> resultHandlers = Sets.newHashSet();
+	private Multimap<Statement, State> typeStateChange = HashMultimap.create();
+	private ExtractParameterAnalysis parameterAnalysis;
+	// constraints
+	private ConstraintSolver constraintSolver;
+	private boolean internalConstraintSatisfied;
+	// predicates
 	private Collection<EnsuredCrySLPredicate> ensuredPredicates = Sets.newHashSet();
 	private Collection<DarkPredicate> darkPredicates = Sets.newHashSet();
 	private Collection<DarkPredicate> neededDarkPreds = null;
-	private Multimap<Statement, State> typeStateChange = HashMultimap.create();
-	private Collection<EnsuredCrySLPredicate> indirectlyEnsuredPredicates = Sets.newHashSet();
 	private Set<ISLConstraint> missingPredicates = null;
 	private Set<ISLConstraint> missingPredicatesWithDarkPreds = null;
-	private ConstraintSolver constraintSolver;
-	private boolean internalConstraintSatisfied;
-	protected Map<Statement, SootMethod> allCallsOnObject = Maps.newLinkedHashMap();
-	private ExtractParameterAnalysis parameterAnalysis;
-	private Set<ResultsHandler> resultHandlers = Sets.newHashSet();
-	private boolean secure = true;
+	private Collection<EnsuredCrySLPredicate> indirectlyEnsuredPredicates = Sets.newHashSet(); //TODO: check if this still has an usage
 
+	/**
+	 * Constructor
+	 */
 	public AnalysisSeedWithSpecification(CryptoScanner cryptoScanner, Statement stmt, Val val, ClassSpecification spec) {
 		super(cryptoScanner, stmt, val, spec.getFSM().getInitialWeight(stmt));
 		this.spec = spec;
@@ -110,11 +117,9 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		};
 	}
 
-	@Override
-	public String toString() {
-		return "AnalysisSeed [" + super.toString() + " with spec " + spec.getRule().getClassName() + "]";
-	}
-
+	/**
+	 * This will process the seed, check all constraints and add errors.
+	 */
 	public void execute() {
 		cryptoScanner.getAnalysisListener().seedStarted(this);
 		
@@ -149,7 +154,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				}
 			}
 		}
-
 		
 		computeTypestateErrorUnits();
 		computeTypestateErrorsForEndOfObjectLifeTime();
@@ -160,14 +164,12 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		cryptoScanner.getAnalysisListener().collectedValues(this, parameterAnalysis.getCollectedValues());
 	}
 
-	private boolean checkInternalConstraints() {
-		cryptoScanner.getAnalysisListener().beforeConstraintCheck(this);
-		constraintSolver = new ConstraintSolver(this, allCallsOnObject.keySet(), cryptoScanner.getAnalysisListener());
-		cryptoScanner.getAnalysisListener().checkedConstraints(this, constraintSolver.getRelConstraints());
-		boolean constraintSatisfied = (0 == constraintSolver.evaluateRelConstraints());
-		cryptoScanner.getAnalysisListener().afterConstraintCheck(this);
-		return constraintSatisfied;
-	}
+	
+	//
+	//
+	// TYPESTATE CHECKS
+	//
+	//
 
 	private ForwardBoomerangResults<TransitionFunction> runTypestateAnalysis() {
 		analysis.run(this);
@@ -260,12 +262,34 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 	}
 	
+	
+	//
+	//
+	// PREDICATE MECHANISM
+	//
+	//
+	
+	/**
+	 * This is used to add a new ensured predicate and re-run all constraint and predicate checks to see, 
+	 * if new predicates should be ensured.
+	 * @param ensPred
+	 */
+	public void addEnsuredPredicate(EnsuredCrySLPredicate ensPred) {
+		if((ensPred instanceof DarkPredicate && darkPredicates.add((DarkPredicate) ensPred))){
+			// do nothing
+		}
+		else if(!(ensPred instanceof DarkPredicate) && ensuredPredicates.add(ensPred)) {
+			// ensPred was added to ensuredPredicates
+			checkConstraintsAndEnsurePredicates();
+		}
+	}
+	
 	/**
 	 * This method will trigger the whole predicate mechanism.
 	 * It creates an ensured or dark predicate, based on constraints (CONSTRAINTS and REQUIRES) or predicate condition (condition => predToBeEnsured)
 	 * for each typestate change entry, if that predicate should be generated after transition of that typestate change.
 	 */
-	public void checkConstraintsAndEnsurePredicates() {
+	private void checkConstraintsAndEnsurePredicates() {
 		// evaluate constraints (CONSTRAINTS and REQUIRES)
 		boolean satisfiesConstraintSytem = isConstraintSystemSatisfied();
 				
@@ -461,7 +485,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	/**
-	 * 
 	 * @param value
 	 * @param stateNode
 	 * @return true, if the {@link TransitionFunction} have a transition to the {@link State} stateNode.
@@ -483,6 +506,26 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		return res;
 	}
 
+	
+	//
+	//
+	// CONSTRAINTS CHECK
+	//
+	//
+	
+	/**
+	 * This method will evaluate constraints in CONSTRAINT section.
+	 * @return true, if constraints are satisfied
+	 */
+	private boolean checkInternalConstraints() {
+		cryptoScanner.getAnalysisListener().beforeConstraintCheck(this);
+		constraintSolver = new ConstraintSolver(this, allCallsOnObject.keySet(), cryptoScanner.getAnalysisListener());
+		cryptoScanner.getAnalysisListener().checkedConstraints(this, constraintSolver.getRelConstraints());
+		boolean constraintSatisfied = (0 == constraintSolver.evaluateRelConstraints());
+		cryptoScanner.getAnalysisListener().afterConstraintCheck(this);
+		return constraintSatisfied;
+	}
+	
 	/**
 	 * This method won't cause any side effects.
 	 * @return true, if internal constraints and all required predicates are satisfied.
@@ -659,30 +702,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		this.neededDarkPreds = usedDarkPredicates;
 	}
 	
-	public Collection<ISLConstraint> getMissingPredicates(){
-		if(this.missingPredicates == null) {
-			// this is ok, because the method is called after all analysis are finished.
-			computeRemainingRequiredPredicates(this.ensuredPredicates, this.darkPredicates);
-		}
-		return this.missingPredicates;
-	}
-	
-	public Collection<ISLConstraint> getMissingPredicatesWithDarkPreds(){
-		if(this.missingPredicatesWithDarkPreds == null) {
-			// this is ok, because the method is called after all analysis are finished.
-			computeRemainingRequiredPredicates(this.ensuredPredicates, this.darkPredicates);
-		}
-		return this.missingPredicatesWithDarkPreds;
-	}
-	
-	public Collection<DarkPredicate> getNeededDarkPreds(){
-		if(this.neededDarkPreds == null) {
-			// this is ok, because the method is called after all analysis are finished.
-			computeRemainingRequiredPredicates(this.ensuredPredicates, this.darkPredicates);
-		}
-		return this.neededDarkPreds;
-	}
-	
 	private boolean isPredConditionSatisfied(CrySLPredicate pred) {
 		final ISLConstraint conditional = pred.getConstraint();
 		if (conditional == null) {
@@ -700,11 +719,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			}
 			return true;
 		}
-	}
-	
-	private boolean doPredsMatch(CrySLPredicate pred, EnsuredCrySLPredicate ensPred) {
-		//
-		return true;
 	}
 
 	private boolean doPredsParametersMatch(CrySLPredicate pred, EnsuredCrySLPredicate ensPred) {
@@ -772,19 +786,8 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 					values.add(retrieveConstantFromValue(rightSide));
 				} else {
 					final List<ValueBox> useBoxes = rightSide.getUseBoxes();
-
-					// varVal.put(callSite.getVarName(),
-					// retrieveConstantFromValue(useBoxes.get(callSite.getIndex()).getValue()));
 				}
 			}
-			// if (u instanceof AssignStmt) {
-			// final List<ValueBox> useBoxes = ((AssignStmt) u).getRightOp().getUseBoxes();
-			// if (!(useBoxes.size() <= cswpi.getIndex())) {
-			// values.add(retrieveConstantFromValue(useBoxes.get(cswpi.getIndex()).getValue()));
-			// }
-			// } else if (cswpi.getStmt().equals(u)) {
-			// values.add(retrieveConstantFromValue(cswpi.getStmt().getUseBoxes().get(cswpi.getIndex()).getValue()));
-			// }
 		}
 		return values;
 	}
@@ -810,24 +813,12 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		return true;
 	}
 
-	public ClassSpecification getSpec() {
-		return spec;
-	}
-
-	public void addEnsuredPredicate(EnsuredCrySLPredicate ensPred) {
-		if((ensPred instanceof DarkPredicate && darkPredicates.add((DarkPredicate) ensPred))){
-			// do nothing
-		}
-		else if(!(ensPred instanceof DarkPredicate) && ensuredPredicates.add(ensPred)) {
-			// ensPred was added to ensuredPredicates
-			checkConstraintsAndEnsurePredicates();
-		}
-	}
+	
 
 	/**
-	 * Returns true, if the predicate is generated in the state.
+	 * Returns true, if the predicate is ensured after the state {@param stateNode}.
 	 * @param ensPred
-	 * @param stateNode
+	 * @param stateNode 
 	 * @return
 	 */
 	private boolean isPredicateGeneratingState(CrySLPredicate ensPred, State stateNode) {
@@ -844,9 +835,16 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 		return false;
 	}
-
-	public ExtractParameterAnalysis getParameterAnalysis() {
-		return parameterAnalysis;
+	
+	//
+	//
+	// GENERAL METHODS
+	//
+	//
+	
+	@Override
+	public String toString() {
+		return "AnalysisSeed [" + super.toString() + " with spec " + spec.getRule().getClassName() + "]";
 	}
 
 	@Override
@@ -874,6 +872,20 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		return true;
 	}
 
+	//
+	//
+	// GETTER & SETTER METHODS
+	//
+	//
+	
+	public ClassSpecification getSpec() {
+		return spec;
+	}
+	
+	public ExtractParameterAnalysis getParameterAnalysis() {
+		return parameterAnalysis;
+	}
+	
 	public boolean isSecure() {
 		return secure;
 	}
@@ -890,5 +902,29 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	public Map<Statement, SootMethod> getAllCallsOnObject() {
 		return allCallsOnObject;
 	}
-
+	
+	public Collection<ISLConstraint> getMissingPredicates(){
+		if(this.missingPredicates == null) {
+			// this is ok, because the method is called after all analysis are finished.
+			computeRemainingRequiredPredicates(this.ensuredPredicates, this.darkPredicates);
+		}
+		return this.missingPredicates;
+	}
+	
+	public Collection<ISLConstraint> getMissingPredicatesWithDarkPreds(){
+		if(this.missingPredicatesWithDarkPreds == null) {
+			// this is ok, because the method is called after all analysis are finished.
+			computeRemainingRequiredPredicates(this.ensuredPredicates, this.darkPredicates);
+		}
+		return this.missingPredicatesWithDarkPreds;
+	}
+	
+	public Collection<DarkPredicate> getNeededDarkPreds(){
+		if(this.neededDarkPreds == null) {
+			// this is ok, because the method is called after all analysis are finished.
+			computeRemainingRequiredPredicates(this.ensuredPredicates, this.darkPredicates);
+		}
+		return this.neededDarkPreds;
+	}
+	
 }
