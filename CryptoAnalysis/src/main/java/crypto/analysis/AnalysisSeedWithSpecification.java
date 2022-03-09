@@ -117,14 +117,15 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 	public void execute() {
 		cryptoScanner.getAnalysisListener().seedStarted(this);
-		runTypestateAnalysis(); // will create a callgraph of this seed
+		
+		this.results = runTypestateAnalysis(); // creates a callgraph of this seed
 		if (results == null)
-			// Timeout occured.
-			return;
-		allCallsOnObject = results.getInvokedMethodOnInstance();
-		runExtractParameterAnalysis();
-		checkInternalConstraints(); //check CONSTRAINTS
+			return; // Timeout occured.
+		this.allCallsOnObject = results.getInvokedMethodOnInstance(); // get all statements are calls on this seeds object 
+		this.parameterAnalysis = runExtractParameterAnalysis(allCallsOnObject); // extract parameters, that are used in statements of allCallsOnObject
+		this.internalConstraintSatisfied = checkInternalConstraints(); //check CONSTRAINTS
 
+		// TODO documentation
 		Multimap<Statement, State> unitToStates = HashMultimap.create();
 		for (Cell<Statement, Val, TransitionFunction> c : results.asStatementValWeightTable().cellSet()) {
 			unitToStates.putAll(c.getRowKey(), getTargetStates(c.getValue()));
@@ -149,22 +150,26 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			}
 		}
 
+		
 		computeTypestateErrorUnits();
 		computeTypestateErrorsForEndOfObjectLifeTime();
+		
+		checkConstraintsAndEnsurePredicates();
 
 		cryptoScanner.getAnalysisListener().onSeedFinished(this, results);
 		cryptoScanner.getAnalysisListener().collectedValues(this, parameterAnalysis.getCollectedValues());
 	}
 
-	private void checkInternalConstraints() {
+	private boolean checkInternalConstraints() {
 		cryptoScanner.getAnalysisListener().beforeConstraintCheck(this);
 		constraintSolver = new ConstraintSolver(this, allCallsOnObject.keySet(), cryptoScanner.getAnalysisListener());
 		cryptoScanner.getAnalysisListener().checkedConstraints(this, constraintSolver.getRelConstraints());
-		internalConstraintSatisfied = (0 == constraintSolver.evaluateRelConstraints());
+		boolean constraintSatisfied = (0 == constraintSolver.evaluateRelConstraints());
 		cryptoScanner.getAnalysisListener().afterConstraintCheck(this);
+		return constraintSatisfied;
 	}
 
-	private void runTypestateAnalysis() {
+	private ForwardBoomerangResults<TransitionFunction> runTypestateAnalysis() {
 		analysis.run(this);
 		results = analysis.getResults();
 		if (results != null) {
@@ -172,6 +177,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				handler.done(results);
 			}
 		}
+		return results;
 	}
 
 	public void registerResultsHandler(ResultsHandler handler) {
@@ -182,9 +188,10 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 	}
 
-	private void runExtractParameterAnalysis() {
-		this.parameterAnalysis = new ExtractParameterAnalysis(this.cryptoScanner, allCallsOnObject, spec.getFSM());
-		this.parameterAnalysis.run();
+	private ExtractParameterAnalysis runExtractParameterAnalysis(Map<Statement, SootMethod> allCallsOnObject) {
+		ExtractParameterAnalysis parameterAnalysis = new ExtractParameterAnalysis(this.cryptoScanner, allCallsOnObject, spec.getFSM());
+		parameterAnalysis.run();
+		return parameterAnalysis;
 	}
 
 	private void computeTypestateErrorUnits() {
@@ -197,7 +204,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			if (allTypestateChangeStatements.contains(curr)) {
 				Collection<? extends State> targetStates = getTargetStates(c.getValue());
 				for (State newStateAtCurr : targetStates) {
-					typeStateChangeAtStatement(curr, newStateAtCurr);
+					addAndCheckTypeStateChangeAtStatement(curr, newStateAtCurr);
 				}
 			}
 
@@ -236,7 +243,13 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 	}
 
-	private void typeStateChangeAtStatement(Statement curr, State stateNode) {
+	/**
+	 * This method will cause side effects on {@attribute typeStateChange} by adding a new entry for curr and stateNode.
+	 * Further, it reports {@link TypestateError}s and call @onAddedTypestateChange method to generate potential predicates.
+	 * @param curr
+	 * @param stateNode
+	 */
+	private void addAndCheckTypeStateChangeAtStatement(Statement curr, State stateNode) {
 		if (typeStateChange.put(curr, stateNode)) {
 			if (stateNode instanceof ReportingErrorStateNode) {
 				ReportingErrorStateNode errorStateNode = (ReportingErrorStateNode) stateNode;
@@ -245,35 +258,37 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				cryptoScanner.getAnalysisListener().reportError(this, e);
 			}
 		}
-		onAddedTypestateChange(curr, stateNode);
 	}
-
+	
 	/**
-	 * This method will ensure predicates on a given statement, if its state node is a predicate generating state.
-	 * @param curr
-	 * @param stateNode
+	 * This method will trigger the whole predicate mechanism.
+	 * It ensures a predicate at each typestate change entry, if that predicate should be generated after transition of that typestate change.
 	 */
-	private void onAddedTypestateChange(Statement curr, State stateNode) {
+	public void checkConstraintsAndEnsurePredicates() {
 		for (CrySLPredicate predToBeEnsured : spec.getRule().getPredicates()) {
 			if (predToBeEnsured.isNegated()) {
+				// you cannot ensure negated predicates by design
 				continue;
 			}
-
-			if (isPredicateGeneratingState(predToBeEnsured, stateNode)) {
-				ensuresPred(predToBeEnsured, curr, stateNode);
+			for (Entry<Statement, State> e : typeStateChange.entries()) {
+				if (isPredicateGeneratingState(predToBeEnsured, e.getValue())) {
+					// this is a potential location, where the predicate could be ensured
+					// further checks are done in ensuresPred method
+					ensuresPred(predToBeEnsured, e.getKey(), e.getValue());
+				}
 			}
 		}
 	}
 
 	/**
-	 * Expects to ensure a predicate at a given statement and state.
+	 * This will either ensure a {@link DarkPredicate} or an {@link EnsuredCrySLPredicate}, depending on the satisfaction of this seeds constraints.
+	 * If constraints (in ORDER, CONSTRAINTS and REQUIRES) are not satisfied, a {@link DarkPredicate} is ensured, else an {@link EnsuredCrySLPredicate}.
 	 * 
-	 * If constraints of the seeds object and of the optional predicate constraint are not satisfied, 
-	 * the predicate will not be generated, but expected.
+	 * This method is called by @onAddedTypestateChange.
 	 * 
-	 * @param predToBeEnsured
-	 * @param currStmt
-	 * @param stateNode
+	 * @param predToBeEnsured 
+	 * @param currStmt a statement before state change
+	 * @param stateNode the next state, after execution of {@param currStmt}
 	 */
 	private void ensuresPred(CrySLPredicate predToBeEnsured, Statement currStmt, State stateNode) {
 		if (predToBeEnsured.isNegated()) {
@@ -335,6 +350,11 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 	}
 
+	/**
+	 * @param parameters predicates parameter list
+	 * @param key parameter name that should be contained
+	 * @return true, if {@param key} is contained in {@param parameters} 
+	 */
 	private boolean predicateParameterEquals(List<ICrySLPredicateParameter> parameters, String key) {
 		for (ICrySLPredicateParameter predicateParam : parameters) {
 			if (key.equals(predicateParam.getName())) {
@@ -345,14 +365,14 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	/**
+	 * This method is called, whenever this seed ensures a predicate that contains other seeds in its parameter list.
 	 * 
-	 * @param predToBeEnsured
-	 * @param currStmt the statement, that expects the predicate
-	 * @param accessGraph holds the type of the object
-	 * @param satisfiesConstraintSytem
+	 * @param currStmt statement, that ensures the predicate
+	 * @param accessGraph holds the type of the other seeds object
+	 * @param ensPred Can be either a DarkPredicate or an EnsuredCrySLPredicate, depending on the satisfaction of this seeds constraints.
 	 */
 	private void expectPredicateOnOtherObject(Statement currStmt, Val accessGraph, EnsuredCrySLPredicate ensPred) {
-		
+		// TODO: Refactor
 		boolean matched = false;
 		// check, if parameter is of a type with specification rules
 		if (accessGraph.value() != null) {
@@ -381,11 +401,18 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		
 	}
 
+	/**
+	 * This method is called by other seeds, whenever they ensure a predicate that contains this seed in its parameter list.
+	 * In instance, this method is triggered by the @expectPredicateOnOtherObject.
+	 *
+	 * @param ensuredCrySLPredicate Can be either a DarkPredicate or an EnsuredCrySLPredicate, depending on the satisfaction of this seeds constraints.
+	 */
 	private void addEnsuredPredicateFromOtherRule(EnsuredCrySLPredicate ensuredCrySLPredicate) {
 		indirectlyEnsuredPredicates.add(ensuredCrySLPredicate);
 		
 		// TODO: this should be done better
-		// create dublicated version for this parameter
+		// create dublicated version for "this" parameter.
+		// this has to be done since required predicates could also hold "this" as a parameter.
 		if(ensuredCrySLPredicate.getPredicate().getParameters().stream().anyMatch(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()))) {
 			EnsuredCrySLPredicate dublicate;
 			List<ICrySLPredicateParameter> params = ensuredCrySLPredicate.getPredicate().getParameters().stream().map(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()) ? new CrySLObject("this", "null") : p).collect(Collectors.toList());
@@ -411,19 +438,16 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	/**
-	 * Expect a predicate when the seeds object is in a given state.
-	 * It uses a call to the predicate handler, that stores expected predicates for each statement and variable.
+	 * This method is called, when the seed expects to ensure a predicate on a statement after a transition to a specific state.
+	 * After this method was called, the {@param predToBeEnsured} is passed to the {@link PredicateHandler} 
+	 * with each statement of all calls on this seed, which could transition to the specific state.
 	 * 
-	 * When internal constraints are satisfied, the predicate will also be generated.
-	 * This is done by passing a new {@EnsuredCrySLPredicate} for each {@Statement}, 
-	 * that could transition to the state node and its Val, to the predicate handler.
-	 * The predicate handler also stores for each statement and variable its ensured predicates.
-	 * 
-	 * When internal constraints are not satisfied, the predicate handler w
-	 * @param stateNode
-	 * @param currStmt
-	 * @param predToBeEnsured
-	 * @param satisfiesConstraintSytem
+	 * In crysl, these predicates contains "this" as a parameter and are accommodated in the ENSURES section.
+	 * Further, the state will be declared with the keyword "after".
+	 * If no state was declared, the final state (or end of lifetime state) is going to be passed.
+	 * @param stateNode 
+	 * @param currStmt 
+	 * @param predToBeEnsured Can be either a DarkPredicate or an EnsuredCrySLPredicate, depending on the satisfaction of this seeds constraints.
 	 */
 	private void expectPredicateWhenThisObjectIsInState(State stateNode, Statement currStmt, EnsuredCrySLPredicate ensuredPred) {
 		predicateHandler.expectPredicate(this, currStmt, ensuredPred.getPredicate(), null);
@@ -437,10 +461,20 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 	}
 
+	/**
+	 * 
+	 * @param value
+	 * @param stateNode
+	 * @return true, if the {@link TransitionFunction} have a transition to the {@link State} stateNode.
+	 */
 	private boolean containsTargetState(TransitionFunction value, State stateNode) {
 		return getTargetStates(value).contains(stateNode);
 	}
 
+	/** 
+	 * @param value
+	 * @return all {@link State}'s, that are reachable with the {@link TransitionFunction} value.
+	 */
 	private Collection<? extends State> getTargetStates(TransitionFunction value) {
 		Set<State> res = Sets.newHashSet();
 		for (ITransition t : value.values()) {
@@ -464,8 +498,13 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		return false;
 	}
 	
+	/**
+	 * This method will receive all required predicates from {@link ConstraintSolver} 
+	 * and filter out predicates that are predefined, because they are validated by the {@link ConstraintSolver} itself.
+	 * @return required predicates for seed object
+	 */
 	private Set<ISLConstraint> getRequiredPredicates(){
-		// get the required predicates and remove all predefined predicates, because they have dedicated errors
+		// get the required predicates and remove all predefined predicates, because they have dedicated checks and errors
 		Set<ISLConstraint> requiredPredicates = Sets.newHashSet(constraintSolver.getRequiredPredicates());
 		requiredPredicates.removeAll(requiredPredicates.parallelStream()
 				.filter(p -> (p instanceof RequiredCrySLPredicate && ConstraintSolver.predefinedPreds.contains(((RequiredCrySLPredicate) p).getPred().getPredName()))
@@ -483,13 +522,25 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 	
 	/**
-	 * This method will efficiently check if a required predicates is satisfied.
-	 * This method is used in @fastCheckRequiredPredicates and in @evaluatePredCond
-	 * @param pred
-	 * @param existingPredicates
-	 * @return
+	 * This method will efficiently check if a required predicate is satisfied or not.
+	 * This method is used in @fastCheckRequiredPredicates and in @evaluatePredCond.
+	 * @param pred The required predicate that should used to be ensured
+	 * @param existingPredicates predicates that are ensured
+	 * @return true, if pred is matching any predicate in existingPredicates
 	 */
 	private boolean fastCheckRequiredPredicate(ISLConstraint pred, Collection<EnsuredCrySLPredicate> existingPredicates) {
+		
+		// Internally, this will check if the predicate satisfied by finding a contradiction.
+		// That is the case when its condition is satisfied and
+		// - pred is of type {@link RequiredCrySLPredicate} and
+		// 		- pred is ensured, but is required to be not ensured
+		// 		- pred is not ensured, but is required to be ensured
+		// - pred is of type {@link AlternativeReqPredicate} and
+		//		- all alternative negated predicates (preds that should be not ensured) are ensured
+		//			& all alternative predicates (preds that should be ensured) are not ensured
+		//
+		// If no contradiction was found, the required pred has to be satisfied.
+		
 		if (pred instanceof RequiredCrySLPredicate) {
 			RequiredCrySLPredicate reqPred = (RequiredCrySLPredicate) pred;
 			if(reqPred.getPred().isNegated()){
@@ -530,6 +581,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			}		
 		}
 		// passed all checks!
+		// no contradiction found.
 		return true;
 	}
 
@@ -769,8 +821,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 		else if(!(ensPred instanceof DarkPredicate) && ensuredPredicates.add(ensPred)) {
 			// ensPred was added to ensuredPredicates
-			for (Entry<Statement, State> e : typeStateChange.entries())
-				onAddedTypestateChange(e.getKey(), e.getValue());
+			checkConstraintsAndEnsurePredicates();
 		}
 	}
 
