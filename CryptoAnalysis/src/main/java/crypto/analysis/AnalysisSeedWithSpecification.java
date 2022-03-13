@@ -336,10 +336,9 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 		
 		// check if expect predicate when *this* object is in state
-		for (ICrySLPredicateParameter predicateParam : ensuredPred.getPredicate().getParameters()) {
-			if (predicateParam.getName().equals("this")) {
-				expectPredicateWhenThisObjectIsInState(stateNode, currStmt, ensuredPred);
-			}
+		// by design, this can only be the first parameter
+		if(ensuredPred.getPredicate().getParameters().get(0).getName().equals("this")){
+			expectPredicateWhenThisObjectIsInState(stateNode, currStmt, ensuredPred);
 		}
 		
 		// expect predicate on *other* object
@@ -418,7 +417,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		if(!matched) {
 			// found no specification for the given parameter type
 			AnalysisSeedWithEnsuredPredicate seed = cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(currStmt, accessGraph));
-			predicateHandler.expectPredicate(seed, currStmt, ensPred.getPredicate(), this);
+			predicateHandler.expectPredicate(seed, currStmt, ensPred.getPredicate());
 			seed.addEnsuredPredicate(ensPred);
 		}
 		
@@ -473,7 +472,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	 * @param predToBeEnsured Can be either a DarkPredicate or an EnsuredCrySLPredicate, depending on the satisfaction of this seeds constraints.
 	 */
 	private void expectPredicateWhenThisObjectIsInState(State stateNode, Statement currStmt, EnsuredCrySLPredicate ensuredPred) {
-		predicateHandler.expectPredicate(this, currStmt, ensuredPred.getPredicate(), null);
+		predicateHandler.expectPredicate(this, currStmt, ensuredPred.getPredicate());
 		for (Cell<Statement, Val, TransitionFunction> e : results.asStatementValWeightTable().cellSet()) {
 			// TODO check for any reachable state that don't kill
 			// predicates.

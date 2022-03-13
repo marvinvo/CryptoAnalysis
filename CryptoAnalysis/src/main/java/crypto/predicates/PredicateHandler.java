@@ -210,14 +210,12 @@ public class PredicateHandler {
 		}
 	}
 
-	public void expectPredicate(IAnalysisSeed expectedOn, Statement stmt, CrySLPredicate predToBeEnsured, IAnalysisSeed expectedFrom) {
+	public void expectPredicate(IAnalysisSeed expectedOn, Statement stmt, CrySLPredicate predToBeEnsured) {
 		for (Unit succ : cryptoScanner.icfg().getSuccsOf(stmt.getUnit().get())) {
 			Set<CrySLPredicate> set = expectedPredicateObjectBased.get(succ, expectedOn);
 			if (set == null)
 				set = Sets.newHashSet();
-			if(expectedFrom != null) {
-				set.add(predToBeEnsured);
-			}
+			set.add(predToBeEnsured);
 			expectedPredicateObjectBased.put(new Statement((Stmt) succ, stmt.getMethod()), expectedOn, set);
 		}
 	}
