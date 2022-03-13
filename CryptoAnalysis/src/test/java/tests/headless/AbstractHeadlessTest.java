@@ -4,10 +4,14 @@ import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.After;
 import org.junit.Before;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -37,6 +41,7 @@ import crypto.rules.CrySLRule;
 import soot.G;
 import sync.pds.solver.nodes.Node;
 import test.IDEALCrossingTestingFramework;
+import test.UsagePatternTestingFramework;
 import tests.headless.FindingsType.FalseNegatives;
 import tests.headless.FindingsType.FalsePositives;
 import tests.headless.FindingsType.NoFalseNegatives;
@@ -57,6 +62,7 @@ public abstract class AbstractHeadlessTest {
 	private CrySLAnalysisListener errorCountingAnalysisListener;
 	private Table<String, Class<?>, Integer> errorMarkerCountPerErrorTypeAndMethod = HashBasedTable.create();
 	private static ReportFormat reportFormat = null;
+	private static Stopwatch scanWatch;
 	
 	public static void setReportFormat(ReportFormat reportFormat) {
 		AbstractHeadlessTest.reportFormat = reportFormat;
@@ -193,7 +199,12 @@ public abstract class AbstractHeadlessTest {
 			public void beforeConstraintCheck(AnalysisSeedWithSpecification analysisSeedWithSpecification) {}
 
 			@Override
-			public void beforeAnalysis() {}
+			public void beforeAnalysis() {
+				if(scanWatch == null) {
+					scanWatch = Stopwatch.createUnstarted();
+				}
+				scanWatch.start();
+			}
 
 			@Override
 			public void afterPredicateCheck(AnalysisSeedWithSpecification analysisSeedWithSpecification) {}
@@ -202,7 +213,9 @@ public abstract class AbstractHeadlessTest {
 			public void afterConstraintCheck(AnalysisSeedWithSpecification analysisSeedWithSpecification) {}
 
 			@Override
-			public void afterAnalysis() {}
+			public void afterAnalysis() {
+				scanWatch.stop();
+			}
 
 			@Override
 			public void onSecureObjectFound(IAnalysisSeed analysisObject) {
@@ -216,6 +229,12 @@ public abstract class AbstractHeadlessTest {
 
 			}
 		};
+	}
+	
+	@After
+	public void printStats() {
+		System.out.println("TOTAL SCAN TIME:");
+		System.out.println(scanWatch.elapsed(TimeUnit.MILLISECONDS));
 	}
 
 	protected void assertErrors() {
