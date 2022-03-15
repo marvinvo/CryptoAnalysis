@@ -603,7 +603,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				}
 			}
 		} else {
-			List<CrySLPredicate> alternatives = ((AlternativeReqPredicate) pred).getAlternatives();
+			List<CrySLPredicate> alternatives = Lists.newArrayList(((AlternativeReqPredicate) pred).getAlternatives());
 			List<CrySLPredicate> negatives = alternatives.parallelStream().filter(e -> e.isNegated()).collect(Collectors.toList()); // holds all negated alternative preds
 		
 			// TODO check if it is faster to first check positives and then negatives
@@ -611,7 +611,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				existingPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred)))) {
 				// all negative alternative preds are ensured
 				alternatives.removeAll(negatives); // now check the positives
-				if (!alternatives.parallelStream().anyMatch(e -> 
+				if (alternatives.isEmpty() || !alternatives.parallelStream().anyMatch(e -> 
 				existingPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred)))) {
 					// also no positiv alternative pred is ensured
 					if(alternatives.parallelStream().allMatch(p -> isPredConditionSatisfied(p))) {
@@ -666,7 +666,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 					}
 				}
 			} else {
-				List<CrySLPredicate> alternatives = ((AlternativeReqPredicate) pred).getAlternatives();
+				List<CrySLPredicate> alternatives = Lists.newArrayList(((AlternativeReqPredicate) pred).getAlternatives());
 				List<CrySLPredicate> negatives = alternatives.parallelStream().filter(e -> e.isNegated()).collect(Collectors.toList()); // holds all negated alternative preds
 			
 				if(alternatives.parallelStream().allMatch(p -> isPredConditionSatisfied(p))) {
