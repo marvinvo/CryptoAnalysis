@@ -19,6 +19,11 @@ public class PredicateErrorCountAssertion implements Assertion {
 	public boolean isSatisfied() {
 		return expectedErrorCounts <= actualErrorCounts;
 	}
+	
+	@Override
+	public String toString() {
+		return "Expected " + expectedErrorCounts + " RequiredErrors, but got "+ actualErrorCounts + ".";
+	}
 
 	@Override
 	public boolean isImprecise() {

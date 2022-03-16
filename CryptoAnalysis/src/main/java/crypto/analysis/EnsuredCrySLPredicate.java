@@ -10,10 +10,22 @@ public class EnsuredCrySLPredicate {
 
 	private final CrySLPredicate predicate;
 	private final Multimap<CallSiteWithParamIndex, ExtractedValue> parametersToValues;
+	private IAnalysisSeed[] seedsForParameters;
 
 	public EnsuredCrySLPredicate(CrySLPredicate predicate, Multimap<CallSiteWithParamIndex, ExtractedValue> parametersToValues2) {
 		this.predicate = predicate;
 		parametersToValues = parametersToValues2;
+		seedsForParameters = new IAnalysisSeed[predicate.getParameters().size()];
+	}
+	
+	public void addAnalysisSeedToParameter(IAnalysisSeed seed, int paramPosition) {
+		if(paramPosition < predicate.getParameters().size()) {
+			seedsForParameters[paramPosition] = seed; 
+		}
+	}
+	
+	public IAnalysisSeed[] getParameterToAnalysisSeed() {
+		return seedsForParameters;
 	}
 	
 	public CrySLPredicate getPredicate(){
@@ -51,6 +63,17 @@ public class EnsuredCrySLPredicate {
 				return false;
 		} else if (!predicate.equals(other.predicate))
 			return false;
+		if(!this.parametersToValues.equals(other.parametersToValues)) {
+			return false;
+		}
+		if(this.seedsForParameters.length != other.seedsForParameters.length) {
+			return false;
+		}
+		for(int i=0; i<this.seedsForParameters.length; i++) {
+			if(this.seedsForParameters[i] != other.seedsForParameters[i]) {
+				return false;
+			}
+		}
 		return true;
 	}
 

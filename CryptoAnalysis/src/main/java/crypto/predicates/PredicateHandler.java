@@ -233,7 +233,7 @@ public class PredicateHandler {
 			for (ISLConstraint pred : missingPredicates) {
 				if (pred instanceof RequiredCrySLPredicate) {
 					reportMissingPred(seed, (RequiredCrySLPredicate) pred);
-				} else if (pred instanceof CrySLConstraint) {
+				} else if (pred instanceof AlternativeReqPredicate) {
 					for (CrySLPredicate altPred : ((AlternativeReqPredicate) pred).getAlternatives()) {
 						// TODO create a dedicated error for alternative predicates
 						// they are connected with a logical or -> the error should point that out
@@ -400,7 +400,7 @@ public class PredicateHandler {
 		CrySLRule rule = seed.getSpec().getRule();
 		if (!rule.getPredicates().parallelStream().anyMatch(e -> missingPred.getPred().getPredName().equals(e.getPredName()) && missingPred.getPred().getParameters().get(0).equals(e.getParameters().get(0)))) {
 			for (CallSiteWithParamIndex v : seed.getParameterAnalysis().getAllQuerySites()) {
-				if (missingPred.getPred().getInvolvedVarNames().contains(v.getVarName()) && v.stmt().equals(missingPred.getLocation())) {
+				if (missingPred.getPred().getInvolvedVarNames().contains(v.getVarName())) {
 					RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(v, null));
 					seed.addError(e);
 					cryptoScanner.getAnalysisListener().reportError(seed, e);

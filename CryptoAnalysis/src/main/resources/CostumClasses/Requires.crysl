@@ -38,6 +38,33 @@ OBJECTS
 	main.prefined.A p2inO7;
 	main.prefined.A p1inO8;
 	main.prefined.A p2inO8;
+		// 3 cases same predicate
+	main.prefined.A p1inO9;
+	main.prefined.A p2inO9;
+	main.prefined.A p3inO9;
+	main.prefined.A p1inO10;
+	main.prefined.A p2inO10;
+	main.prefined.A p3inO10;
+	main.prefined.A p1inO11;
+	main.prefined.A p2inO11;
+	main.prefined.A p3inO11;
+	main.prefined.A p1inO12;
+	main.prefined.A p2inO12;
+	main.prefined.A p3inO12;
+	main.prefined.A p1inO13;
+	main.prefined.A p2inO13;
+	main.prefined.A p3inO13;
+	main.prefined.A p1inO14;
+	main.prefined.A p2inO14;
+	main.prefined.A p3inO14;
+	main.prefined.A p1inO15;
+	main.prefined.A p2inO15;
+	main.prefined.A p3inO15;
+	main.prefined.A p1inO16;
+	main.prefined.A p2inO16;
+	main.prefined.A p3inO16;
+	// IMPLICATE
+	
 
 	
 EVENTS
@@ -79,7 +106,22 @@ EVENTS
 	o6: pred1onP1_OR_notPred2onP2(p1inO6, p2inO6);
 	o7: notPred1onP1_OR_pred2onP2(p1inO7, p2inO7);
 	o8: notPred1onP1_OR_notPred2onP2(p1inO8, p2inO8);
-	O:= o1 | o2 | o3 | o4 | o5 | o6 | o7 | o8;
+	
+	// 3 cases same predicate
+	o9: pred1onP1_OR_pred1onP2_OR_pred1onP3(p1inO9, p2inO9, p3inO9);
+	o10: pred1onP1_OR_notPred1onP2_OR_pred1onP3(p1inO10, p2inO10, p3inO10);
+	o11: notPred1onP1_OR_pred1onP2_OR_pred1onP3(p1inO11, p2inO11, p3inO11);
+	o12: notPred1onP1_OR_notPred1onP2_OR_pred1onP3(p1inO12, p2inO12, p3inO12);
+	o13: pred1onP1_OR_pred1onP2_OR_notPred1onP3(p1inO13, p2inO13, p3inO13);
+	o14: pred1onP1_OR_notPred1onP2_OR_notPred1onP3(p1inO14, p2inO14, p3inO14);
+	o15: notPred1onP1_OR_pred1onP2_OR_notPred1onP3(p1inO15, p2inO15, p3inO15);
+	o16: notPred1onP1_OR_notPred1onP2_OR_notPred1onP3(p1inO16, p2inO16, p3inO16);
+	
+	// IMPLICATE
+	
+	
+	
+	O:= o1 | o2 | o3 | o4 | o5 | o6 | o7 | o8 | o9 | o10 | o11 | o12 | o13 | o14 | o15 | o16;
 	
 	All:= S | A | O;
 	
@@ -118,6 +160,16 @@ REQUIRES
 	pred1[p1inO6] || !pred2[p2inO6];
 	!pred1[p1inO7] || pred2[p2inO7];
 	!pred1[p1inO8] || !pred2[p2inO8];
+	
+	// 3 cases same predicate
+	pred1[p1inO9] || pred1[p2inO9] || pred1[p3inO9];
+	pred1[p1inO10] || !pred1[p2inO10] || pred1[p3inO10];
+	!pred1[p1inO11] || pred1[p2inO11] || pred1[p3inO11];
+	!pred1[p1inO12] || !pred1[p2inO12] || pred1[p3inO12];
+	pred1[p1inO13] || pred1[p2inO13] || !pred1[p3inO13];
+	pred1[p1inO14] || !pred1[p2inO14] || !pred1[p3inO14];
+	!pred1[p1inO15] || pred1[p2inO15] || !pred1[p3inO15];
+	!pred1[p1inO16] || !pred1[p2inO16] || !pred1[p3inO16];
 	
 ENSURES
 	requiredPredicateWasEnsured[this];

@@ -134,6 +134,8 @@ public class ConstraintSolver {
 	 */
 	private ISLConstraint collectAlternativePredicates(CrySLConstraint cons, AlternativeReqPredicate alt) {
 		CrySLPredicate right = (CrySLPredicate) cons.getRight();
+		RequiredCrySLPredicate reqPred = retrieveValuesForPred(right);
+		right.setLocation(reqPred.getLocation());
 		if (alt == null) {
 			alt = new AlternativeReqPredicate(right, right.getLocation());
 		} else {
@@ -141,7 +143,10 @@ public class ConstraintSolver {
 		}
 
 		if (cons.getLeft() instanceof CrySLPredicate) {
-			alt.addAlternative((CrySLPredicate) cons.getLeft());
+			CrySLPredicate left = (CrySLPredicate) cons.getLeft();
+			RequiredCrySLPredicate reqLeft = retrieveValuesForPred(left);
+			left.setLocation(reqLeft.getLocation());
+			alt.addAlternative(left);
 		} else {
 			return collectAlternativePredicates((CrySLConstraint) cons.getLeft(), alt);
 		}

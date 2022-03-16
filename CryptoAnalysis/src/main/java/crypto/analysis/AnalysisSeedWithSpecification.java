@@ -59,6 +59,8 @@ import soot.jimple.InvokeExpr;
 import soot.jimple.Stmt;
 import soot.jimple.StringConstant;
 import soot.jimple.ThrowStmt;
+import soot.jimple.internal.JAssignStmt;
+import soot.jimple.internal.JInvokeStmt;
 import sync.pds.solver.nodes.Node;
 import typestate.TransitionFunction;
 import typestate.finiteautomata.ITransition;
@@ -140,6 +142,9 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				predicateHandler.addNewPred(this, c.getRowKey(), c.getColumnKey(), pred);
 				// TODO: this should be done better
 				// create dublicated version for this parameter
+				pred.addAnalysisSeedToParameter(this, 0);
+				this.addEnsuredPredicate(pred);
+				/*
 				if(pred.getPredicate().getParameters().stream().anyMatch(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()))) {
 					EnsuredCrySLPredicate dublicate;
 					List<ICrySLPredicateParameter> params = pred.getPredicate().getParameters().stream().map(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()) ? new CrySLObject("this", "null") : p).collect(Collectors.toList());
@@ -151,7 +156,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 						dublicate = new EnsuredCrySLPredicate(new CrySLPredicate(params.get(0), pred.getPredicate().getPredName(), params, false), pred.getParametersToValues());
 					}
 					this.addEnsuredPredicate(dublicate);
-				}
+				}*/
 			}
 		}
 		
@@ -338,6 +343,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		// check if expect predicate when *this* object is in state
 		// by design, this can only be the first parameter
 		if(ensuredPred.getPredicate().getParameters().get(0).getName().equals("this")){
+			ensuredPred.addAnalysisSeedToParameter(this, 0);
 			expectPredicateWhenThisObjectIsInState(stateNode, currStmt, ensuredPred);
 		}
 		
@@ -349,19 +355,25 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 			for (CrySLMethod crySLMethod : convert) {
 				Entry<String, String> retObject = crySLMethod.getRetObject();
-				if (!retObject.getKey().equals("_") && currStmt.getUnit().get() instanceof AssignStmt && predicateParameterEquals(ensuredPred.getPredicate().getParameters(), retObject.getKey())) {
-					AssignStmt as = (AssignStmt) currStmt.getUnit().get();
-					Value leftOp = as.getLeftOp();
-					AllocVal val = new AllocVal(leftOp, currStmt.getMethod(), as.getRightOp(), new Statement(as, currStmt.getMethod()));
-					expectPredicateOnOtherObject(currStmt, val, ensuredPred);
+				if (!retObject.getKey().equals("_") && 
+						currStmt.getUnit().get() instanceof AssignStmt) {
+					int matchPosition = predicateParameterEquals(ensuredPred.getPredicate().getParameters(), retObject.getKey());
+					if(matchPosition >= 0) {
+						AssignStmt as = (AssignStmt) currStmt.getUnit().get();
+						Value leftOp = as.getLeftOp();
+						AllocVal val = new AllocVal(leftOp, currStmt.getMethod(), as.getRightOp(), new Statement(as, currStmt.getMethod()));
+						// TODO check
+						expectPredicateOnOtherObject(currStmt, val, ensuredPred, matchPosition);
+					}
 				}
 				int i = 0;
 				for (Entry<String, String> p : crySLMethod.getParameters()) {
-					if (predicateParameterEquals(ensuredPred.getPredicate().getParameters(), p.getKey())) {
+					int matchPosition = predicateParameterEquals(ensuredPred.getPredicate().getParameters(), p.getKey());
+					if (matchPosition >= 0) {
 						Value param = ie.getArg(i);
 						if (param instanceof Local) {
 							Val val = new Val(param, currStmt.getMethod());
-							expectPredicateOnOtherObject(currStmt, val, ensuredPred);
+							expectPredicateOnOtherObject(currStmt, val, ensuredPred, matchPosition);
 						}
 					}
 					i++;
@@ -377,13 +389,14 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	 * @param key parameter name that should be contained
 	 * @return true, if {@param key} is contained in {@param parameters} 
 	 */
-	private boolean predicateParameterEquals(List<ICrySLPredicateParameter> parameters, String key) {
-		for (ICrySLPredicateParameter predicateParam : parameters) {
+	private int predicateParameterEquals(List<ICrySLPredicateParameter> parameters, String key) {
+		for(int i=0; i<parameters.size(); i++) {
+			ICrySLPredicateParameter predicateParam = parameters.get(i);
 			if (key.equals(predicateParam.getName())) {
-				return true;
+				return i;
 			}
 		}
-		return false;
+		return -1;
 	}
 
 	/**
@@ -393,7 +406,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	 * @param accessGraph holds the type of the other seeds object
 	 * @param ensPred Can be either a DarkPredicate or an EnsuredCrySLPredicate, depending on the satisfaction of this seeds constraints.
 	 */
-	private void expectPredicateOnOtherObject(Statement currStmt, Val accessGraph, EnsuredCrySLPredicate ensPred) {
+	private void expectPredicateOnOtherObject(Statement currStmt, Val accessGraph, EnsuredCrySLPredicate ensPred, int positionOfOtherObject) {
 		// TODO: Refactor
 		boolean matched = false;
 		// check, if parameter is of a type with specification rules
@@ -405,6 +418,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 					// check if refType is matching type of spec
 					if (spec.getRule().getClassName().equals(refType.getSootClass().getName()) || spec.getRule().getClassName().equals(refType.getSootClass().getShortName())) {
 						AnalysisSeedWithSpecification seed = cryptoScanner.getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(cryptoScanner, currStmt, accessGraph, spec));
+						ensPred.addAnalysisSeedToParameter(seed, positionOfOtherObject);
 						seed.addEnsuredPredicateFromOtherRule(ensPred);
 						// we could return here, because both class specifications and parameter reference should be unique regarding their types
 						if(!(ensPred instanceof DarkPredicate)) {
@@ -417,6 +431,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		if(!matched) {
 			// found no specification for the given parameter type
 			AnalysisSeedWithEnsuredPredicate seed = cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(currStmt, accessGraph));
+			ensPred.addAnalysisSeedToParameter(seed, positionOfOtherObject);
 			predicateHandler.expectPredicate(seed, currStmt, ensPred.getPredicate());
 			seed.addEnsuredPredicate(ensPred);
 		}
@@ -435,6 +450,9 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		// TODO: this should be done better
 		// create dublicated version for "this" parameter.
 		// this has to be done since required predicates could also hold "this" as a parameter.
+		ensuredCrySLPredicate.addAnalysisSeedToParameter(this, 0);
+		this.addEnsuredPredicate(ensuredCrySLPredicate);
+		/*
 		if(ensuredCrySLPredicate.getPredicate().getParameters().stream().anyMatch(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()))) {
 			EnsuredCrySLPredicate dublicate;
 			List<ICrySLPredicateParameter> params = ensuredCrySLPredicate.getPredicate().getParameters().stream().map(p -> p instanceof CrySLObject && ((CrySLObject)p).getJavaType().equals(this.spec.toString()) ? new CrySLObject("this", "null") : p).collect(Collectors.toList());
@@ -447,7 +465,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			}
 			ensuredCrySLPredicate = dublicate;
 			this.addEnsuredPredicate(dublicate);
-		}
+		}*/
 		
 		if (results == null)
 			// this seed haven't been processed yet
@@ -479,7 +497,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			if (containsTargetState(e.getValue(), stateNode)) {
 				predicateHandler.addNewPred(this, e.getRowKey(), e.getColumnKey(), ensuredPred);
 			}
-			
 		}
 	}
 
@@ -610,8 +627,8 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			if (negatives.isEmpty() || negatives.parallelStream().allMatch(e -> 
 				existingPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred)))) {
 				// all negative alternative preds are ensured
-				alternatives.removeAll(negatives); // now check the positives
-				if (alternatives.isEmpty() || !alternatives.parallelStream().anyMatch(e -> 
+				List<CrySLPredicate> positives = alternatives.parallelStream().filter(e -> !e.isNegated()).collect(Collectors.toList()); // now check the positives
+				if (positives.isEmpty() || !positives.parallelStream().anyMatch(e -> 
 				existingPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred)))) {
 					// also no positiv alternative pred is ensured
 					if(alternatives.parallelStream().allMatch(p -> isPredConditionSatisfied(p))) {
@@ -675,15 +692,15 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 					if (!alternatives.isEmpty() && (negatives.isEmpty() || negatives.parallelStream().allMatch(e -> 
 						existingEnsuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred))))) {
 						// all negative alternative preds are ensured
-						alternatives.removeAll(negatives); // now check the positives
-						if (alternatives.isEmpty() || !alternatives.parallelStream().anyMatch(e -> 
+						List<CrySLPredicate> positives = alternatives.parallelStream().filter(e -> !e.isNegated()).collect(Collectors.toList()); // now check the positives
+						if (positives.isEmpty() || !positives.parallelStream().anyMatch(e -> 
 						existingEnsuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(e) && doPredsParametersMatch(e, ensPred)))) {
 							// also no positiv alternative pred is ensured
 							// hence the alternative pred is not ensured
 							remainingRequiredPredicates.add(pred);
 							// now check if any alternative preds are ensured with dark preds
 							// this can only be the case for positiv preds
-							Collection<DarkPredicate> darkPredsThatEnsureAnyPositiveAlternativePred = existingDarkPredicates.parallelStream().filter(darkPred -> alternatives.parallelStream().anyMatch(reqPred -> darkPred.getPredicate().equals(reqPred) && doPredsParametersMatch(reqPred, darkPred))).collect(Collectors.toList());
+							Collection<DarkPredicate> darkPredsThatEnsureAnyPositiveAlternativePred = existingDarkPredicates.parallelStream().filter(darkPred -> positives.parallelStream().anyMatch(reqPred -> darkPred.getPredicate().equals(reqPred) && doPredsParametersMatch(reqPred, darkPred))).collect(Collectors.toList());
 							if(darkPredsThatEnsureAnyPositiveAlternativePred.isEmpty()) {
 								// found no matching dark pred
 								remainingRequiredPredicatesWithDarkPreds.addAll(alternatives);
@@ -719,8 +736,119 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			return true;
 		}
 	}
-
+	
 	private boolean doPredsParametersMatch(CrySLPredicate pred, EnsuredCrySLPredicate ensPred) {
+		if(pred.getParameters().size() != ensPred.getParameterToAnalysisSeed().length) {
+			return false;
+		}
+		for(int i=0; i<pred.getParameters().size(); i++) {
+			ICrySLPredicateParameter param = pred.getParameters().get(i);
+			if(param.getName().equals("_")) {
+				// this can be anything
+				continue;
+			}
+			IAnalysisSeed seedAtParamI = ensPred.getParameterToAnalysisSeed()[i];
+			if(param.getName().equals("this")){
+				if((seedAtParamI == null || !seedAtParamI.equals(this))) {
+					// this is not this seed
+					return false;
+				}
+				else {
+					// this is also this seed
+					continue;
+				}
+			}
+			if(param instanceof CrySLMethod) {
+				// methods are only defined for prefined predicates (noCallTo etc.)
+				return false;
+			}
+			if(param instanceof CrySLObject) {
+				CrySLObject paramObj = (CrySLObject) param;
+				
+				if(!isOfNonTrackableType(param.getName())) {
+					// try to collect expected values for param
+					Collection<String> expVals = Collections.emptySet();
+					for (CallSiteWithParamIndex cswpi : parameterAnalysis.getCollectedValues().keySet()) {
+						if (cswpi.getVarName().equals(param.getName())) {
+							expVals = retrieveValueFromUnit(cswpi, parameterAnalysis.getCollectedValues().get(cswpi));
+						}
+					}
+					
+					if(!expVals.isEmpty()) {
+						// required predicate holds a value, not an object
+						Collection<String> actVals = Collections.emptySet();
+						for (CallSiteWithParamIndex cswpi : ensPred.getParametersToValues().keySet()) {
+							if (cswpi.getVarName().equals(ensPred.getPredicate().getParameters().get(i).getName())) {
+								actVals = retrieveValueFromUnit(cswpi, ensPred.getParametersToValues().get(cswpi));
+							}
+						}
+						String splitter = "";
+						int index = -1;
+						if (paramObj.getSplitter() != null) {
+							splitter = paramObj.getSplitter().getSplitter();
+							index = paramObj.getSplitter().getIndex();
+						}
+						for (String foundVal : expVals) {
+							if (index > -1) {
+								foundVal = foundVal.split(splitter)[index];
+							}
+							actVals = actVals.parallelStream().map(e -> e.toLowerCase()).collect(Collectors.toList());
+							if(!actVals.contains(foundVal.toLowerCase())) {
+								return false;
+							}
+						}
+					}
+				} else {
+					// TODO Refactor
+					// required predicate could still be references to other objects
+					IAnalysisSeed ensSeed = ensPred.getParameterToAnalysisSeed()[i];
+					IAnalysisSeed reqSeed = null;
+					boolean foundSeedWithSpec = false;
+					if(ensSeed != null) {
+						// try to extract seed from other object
+						for (CallSiteWithParamIndex cswpi : parameterAnalysis.getCollectedValues().keySet()) {
+							if (cswpi.getVarName().equals(param.getName())) {
+								for(ExtractedValue q : parameterAnalysis.getCollectedValues().get(cswpi)) {
+									if(q.stmt().getUnit().get() instanceof JInvokeStmt) {
+										Val val = new Val(q.getValue(), q.stmt().getMethod());
+										
+										if(val.getType() instanceof RefType) {
+											RefType refType = (RefType) val.getType();
+											for (ClassSpecification spec : cryptoScanner.getClassSpecifictions()) {
+												// check if refType is matching type of spec
+												if (spec.getRule().getClassName().equals(refType.getSootClass().getName()) || spec.getRule().getClassName().equals(refType.getSootClass().getShortName())) {
+													reqSeed = this.cryptoScanner.getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(this.cryptoScanner, q.stmt(), val, spec));
+													foundSeedWithSpec = true;
+													break;
+												}
+											}
+											
+										}
+										
+									}
+									if(!foundSeedWithSpec) {
+										if(q.stmt().getUnit().get() instanceof AssignStmt) {
+											AssignStmt as = (AssignStmt) q.stmt().getUnit().get();
+											Value leftOp = as.getLeftOp();
+											AllocVal val = new AllocVal(leftOp, q.stmt().getMethod(), as.getRightOp(), new Statement(as, q.stmt().getMethod()));
+											reqSeed = this.cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(q.stmt(), val));
+										}
+									}
+								}
+							}
+						}
+						
+					}
+					if(reqSeed == null || !reqSeed.equals(ensSeed)) {
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
+	private boolean oldDoPredsParametersMatch(CrySLPredicate pred, EnsuredCrySLPredicate ensPred) {
 		boolean requiredPredicatesExist = true;
 		for (int i = 0; i < pred.getParameters().size(); i++) {
 			String var = pred.getParameters().get(i).getName();

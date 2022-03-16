@@ -44,6 +44,17 @@ public class RequiredCrySLPredicate implements ISLConstraint {
 				return false;
 		} else if (!stmt.equals(other.stmt))
 			return false;
+		//also check, if parameter does match
+		// since this is a required pred, we can simply compare parameter names
+		// because it is only compared with other required predicates of the same spec
+		if(predicate.getParameters().size() != other.predicate.getParameters().size()) {
+			return false;
+		}
+		for(int i=0; i<predicate.getParameters().size(); i++) {
+			if(!predicate.getParameters().get(i).getName().equals(other.predicate.getParameters().get(i).getName())) {
+				return false;
+			}
+		}
 		return true;
 	}
 
