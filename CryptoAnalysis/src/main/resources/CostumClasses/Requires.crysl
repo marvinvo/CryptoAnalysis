@@ -64,6 +64,22 @@ OBJECTS
 	main.prefined.A p2inO16;
 	main.prefined.A p3inO16;
 	// IMPLICATE
+	main.prefined.A p1inI1;
+	main.prefined.A p2inI1;
+	main.prefined.A p1inI2;
+	main.prefined.A p2inI2;
+	main.prefined.A p1inI3;
+	main.prefined.A p2inI3;
+	main.prefined.A p1inI4;
+	main.prefined.A p2inI4;
+	main.prefined.A p1inI5;
+	main.prefined.A p2inI5;
+	main.prefined.A p1inI6;
+	main.prefined.A p2inI6;
+	main.prefined.A p1inI7;
+	main.prefined.A p2inI7;
+	main.prefined.A p1inI8;
+	main.prefined.A p2inI8;
 	
 
 	
@@ -117,13 +133,25 @@ EVENTS
 	o15: notPred1onP1_OR_pred1onP2_OR_notPred1onP3(p1inO15, p2inO15, p3inO15);
 	o16: notPred1onP1_OR_notPred1onP2_OR_notPred1onP3(p1inO16, p2inO16, p3inO16);
 	
-	// IMPLICATE
-	
-	
-	
 	O:= o1 | o2 | o3 | o4 | o5 | o6 | o7 | o8 | o9 | o10 | o11 | o12 | o13 | o14 | o15 | o16;
 	
-	All:= S | A | O;
+	// IMPLICATE
+	
+	// same predicate
+	i1: pred1onP1_IMPL_pred1onP2(p1inI1, p2inI1);
+	i2: pred1onP1_IMPL_notPred1onP2(p1inI2, p2inI2);
+	i3: notPred1onP1_IMPL_pred1onP2(p1inI3, p2inI3);
+	i4: notPred1onP1_IMPL_notPred1onP2(p1inI4, p2inI4);
+	
+	// multi predicates
+	i5: pred1onP1_IMPL_pred2onP2(p1inI5, p2inI5);
+	i6: pred1onP1_IMPL_notPred2onP2(p1inI6, p2inI6);
+	i7: notPred1onP1_IMPL_pred2onP2(p1inI7, p2inI7);
+	i8: notPred1onP1_IMPL_notPred2onP2(p1inI8, p2inI8);
+	
+	I:= i1 | i2 | i3 | i4 | i5 | i6 | i7 | i8;
+	
+	All:= S | A | O | I;
 	
 ORDER
 	Cons, All
@@ -170,6 +198,14 @@ REQUIRES
 	pred1[p1inO14] || !pred1[p2inO14] || !pred1[p3inO14];
 	!pred1[p1inO15] || pred1[p2inO15] || !pred1[p3inO15];
 	!pred1[p1inO16] || !pred1[p2inO16] || !pred1[p3inO16];
+	
+	// IMPLICATE
+	// same predicate
+	pred1[p1inI1] => pred1[p2inI1];
+	pred1[p1inI2] => !pred1[p2inI2];
+	// multi predicates
+	pred1[p1inI5] => pred2[p2inI5];
+	pred1[p1inI6] => !pred2[p2inI6];
 	
 ENSURES
 	requiredPredicateWasEnsured[this];

@@ -54,18 +54,14 @@ public class Requires {
 	// same predicate
 	public void pred1onP1_IMPL_pred1onP2(A p1, A p2) {}
 	public void pred1onP1_IMPL_notPred1onP2(A p1, A p2) {}
-	public void notPred1onP1_IMPL_pred1onP2(A p1, A p2) {}
-	public void notPred1onP1_IMPL_notPred1onP2(A p1, A p2) {}
 	
 	// multi predicates
 	public void pred1onP1_IMPL_pred2onP2(A p1, A p2) {}
 	public void pred1onP1_IMPL_notPred2onP2(A p1, A p2) {}
-	public void notPred1onP1_IMPL_pred2onP2(A p1, A p2) {}
-	public void notPred1onP1_IMPL_notPred2onP2(A p1, A p2) {}
 	
 	// OR WITH IMPLICATION
 	// same predicate
 	public void pred1onP1_IMPL_pred1onP2_OR_pred1onP1_IMPL_pred2onP2(A p1, A p2) {}
-	public void pred1onP1_IMPL_pred1onP2_OR_notPred1onP1_IMPL_pred2onP2(A p1, A p2) {}
+	public void pred1onP1_IMPL_pred1onP2_OR_pred1onP1_IMPL_!pred2onP2(A p1, A p2) {}
 	
 }
