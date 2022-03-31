@@ -63,7 +63,6 @@ public abstract class AbstractHeadlessTest {
 	private CrySLAnalysisListener errorCountingAnalysisListener;
 	private Table<String, Class<?>, Integer> errorMarkerCountPerErrorTypeAndMethod = HashBasedTable.create();
 	private static ReportFormat reportFormat = null;
-	private static Stopwatch scanWatch;
 	
 	public static void setReportFormat(ReportFormat reportFormat) {
 		AbstractHeadlessTest.reportFormat = reportFormat;
@@ -201,10 +200,7 @@ public abstract class AbstractHeadlessTest {
 
 			@Override
 			public void beforeAnalysis() {
-				if(scanWatch == null) {
-					scanWatch = Stopwatch.createUnstarted();
-				}
-				scanWatch.start();
+				
 			}
 
 			@Override
@@ -215,7 +211,7 @@ public abstract class AbstractHeadlessTest {
 
 			@Override
 			public void afterAnalysis() {
-				scanWatch.stop();
+				
 			}
 
 			@Override
@@ -230,12 +226,6 @@ public abstract class AbstractHeadlessTest {
 
 			}
 		};
-	}
-	
-	@After
-	public void printStats() {
-		System.out.println("TOTAL SCAN TIME:");
-		System.out.println(scanWatch.elapsed(TimeUnit.MILLISECONDS));
 	}
 
 	protected void assertErrors() {
