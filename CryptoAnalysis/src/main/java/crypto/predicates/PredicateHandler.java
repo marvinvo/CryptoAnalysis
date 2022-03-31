@@ -2,6 +2,7 @@ package crypto.predicates;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,6 +41,7 @@ import crypto.rules.CrySLConstraint;
 import crypto.rules.CrySLObject;
 import crypto.rules.CrySLPredicate;
 import crypto.rules.CrySLRule;
+import soot.RefType;
 import soot.SootClass;
 import soot.SootMethod;
 import soot.Unit;
@@ -171,6 +173,7 @@ public class PredicateHandler {
 	}
 
 	private void onPredicateAdded(IAnalysisSeed seedObj, Statement statement, Val seed, EnsuredCrySLPredicate ensPred) {
+		
 		if (statement.isCallsite()) {
 			InvokeExpr ivexpr = ((Stmt) statement.getUnit().get()).getInvokeExpr();
 			if (ivexpr instanceof InstanceInvokeExpr) {
@@ -237,7 +240,7 @@ public class PredicateHandler {
 					for (CrySLPredicate altPred : ((AlternativeReqPredicate) pred).getAlternatives()) {
 						// TODO create a dedicated error for alternative predicates
 						// they are connected with a logical or -> the error should point that out
-						reportMissingPred(seed, new RequiredCrySLPredicate(altPred, altPred.getLocation()));
+						reportMissingPred(seed, new RequiredCrySLPredicate(altPred, pred.getLocation()));
 					}
 				}
 			}
@@ -400,7 +403,7 @@ public class PredicateHandler {
 		CrySLRule rule = seed.getSpec().getRule();
 		if (!rule.getPredicates().parallelStream().anyMatch(e -> missingPred.getPred().getPredName().equals(e.getPredName()) && missingPred.getPred().getParameters().get(0).equals(e.getParameters().get(0)))) {
 			for (CallSiteWithParamIndex v : seed.getParameterAnalysis().getAllQuerySites()) {
-				if (missingPred.getPred().getInvolvedVarNames().contains(v.getVarName())) {
+				if (missingPred.getInvolvedVarNames().contains(v.getVarName()) && missingPred.getLocation().equals(v.stmt())) {
 					RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(v, null));
 					seed.addError(e);
 					cryptoScanner.getAnalysisListener().reportError(seed, e);
@@ -408,9 +411,16 @@ public class PredicateHandler {
 			}
 			// TODO Refactor
 			if(missingPred.getPred().getParameters().stream().anyMatch(param -> param instanceof CrySLObject && ((CrySLObject) param).getName().equals("this"))) {
+				// edge cases that would produce new errors
 				RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(new CallSiteWithParamIndex(missingPred.getLocation(), null, 0, "this"), null));
 				seed.addError(e);
-				//cryptoScanner.getAnalysisListener().reportError(seed, e);
+				if(rule.getClassName().equals("javax.crypto.SecretKey") && missingPred.getPred().getPredName().equals("generatedKey")) {
+					return;
+				}
+				if(rule.getClassName().equals("java.security.KeyPair") && missingPred.getPred().getPredName().equals("generatedKeypair")) {
+					return;
+				}	
+				cryptoScanner.getAnalysisListener().reportError(seed, e);
 			}
 		}
 	}
