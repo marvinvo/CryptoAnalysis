@@ -1,5 +1,7 @@
 package crypto.analysis;
 
+import java.util.Map.Entry;
+
 import com.google.common.collect.Multimap;
 
 import crypto.extractparameter.CallSiteWithParamIndex;
@@ -46,6 +48,14 @@ public class EnsuredCrySLPredicate {
 		final int prime = 31;
 		int result = 1;
 		result = prime * result + ((predicate == null) ? 0 : predicate.hashCode());
+		
+		for(Entry<CallSiteWithParamIndex, ExtractedValue> e: parametersToValues.entries()) {
+			result = prime * result + e.getValue().hashCode();
+		}
+		for(IAnalysisSeed seed: seedsForParameters) {
+			result = prime * result + ((seed != null) ? seed.hashCode() : 0);
+		}
+		 
 		return result;
 	}
 
@@ -70,7 +80,13 @@ public class EnsuredCrySLPredicate {
 			return false;
 		}
 		for(int i=0; i<this.seedsForParameters.length; i++) {
-			if(this.seedsForParameters[i] != other.seedsForParameters[i]) {
+			if((this.seedsForParameters[i] == null) != (other.seedsForParameters[i] == null)) {
+				return false;
+			}
+			if(this.seedsForParameters[i] == null && other.seedsForParameters[i] == null) {
+				continue;
+			}
+			if(!this.seedsForParameters[i].equals(other.seedsForParameters[i])) {
 				return false;
 			}
 		}

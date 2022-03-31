@@ -50,17 +50,20 @@ import soot.RefType;
 import soot.SootMethod;
 import soot.Type;
 import soot.Unit;
+import soot.UnitBox;
 import soot.Value;
 import soot.ValueBox;
 import soot.jimple.AssignStmt;
 import soot.jimple.Constant;
 import soot.jimple.IntConstant;
 import soot.jimple.InvokeExpr;
+import soot.jimple.InvokeStmt;
 import soot.jimple.Stmt;
 import soot.jimple.StringConstant;
 import soot.jimple.ThrowStmt;
 import soot.jimple.internal.JAssignStmt;
 import soot.jimple.internal.JInvokeStmt;
+import soot.jimple.internal.JimpleLocal;
 import sync.pds.solver.nodes.Node;
 import typestate.TransitionFunction;
 import typestate.finiteautomata.ITransition;
@@ -743,7 +746,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 		for(int i=0; i<pred.getParameters().size(); i++) {
 			ICrySLPredicateParameter param = pred.getParameters().get(i);
-			if(param.getName().equals("_")) {
+			if(param.getName().equals("_") || ensPred.getPredicate().getParameters().get(i).getName().equals("_")) {
 				// this can be anything
 				continue;
 			}
@@ -803,39 +806,106 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 					// required predicate could still be references to other objects
 					IAnalysisSeed ensSeed = ensPred.getParameterToAnalysisSeed()[i];
 					IAnalysisSeed reqSeed = null;
-					boolean foundSeedWithSpec = false;
 					if(ensSeed != null) {
-						// try to extract seed from other object
-						for (CallSiteWithParamIndex cswpi : parameterAnalysis.getCollectedValues().keySet()) {
-							if (cswpi.getVarName().equals(param.getName())) {
-								for(ExtractedValue q : parameterAnalysis.getCollectedValues().get(cswpi)) {
-									if(q.stmt().getUnit().get() instanceof JInvokeStmt) {
-										Val val = new Val(q.getValue(), q.stmt().getMethod());
+						Stmt ensStmt = ensSeed.stmt().getUnit().get();
+						if(ensSeed instanceof AnalysisSeedWithSpecification) {
+							AnalysisSeedWithSpecification ensSeedWithSpec = (AnalysisSeedWithSpecification) ensSeed;
+							String ensClassName = ensSeedWithSpec.getSpec().getRule().getClassName();
+							
+							checkValues:
+							for (CallSiteWithParamIndex cswpi : parameterAnalysis.getCollectedValues().keySet()) {
+								if (cswpi.getVarName().equals(param.getName())) {
+									for(ExtractedValue q : parameterAnalysis.getCollectedValues().get(cswpi)) {
+										// q is a value, that matches 
 										
-										if(val.getType() instanceof RefType) {
-											RefType refType = (RefType) val.getType();
-											for (ClassSpecification spec : cryptoScanner.getClassSpecifictions()) {
-												// check if refType is matching type of spec
-												if (spec.getRule().getClassName().equals(refType.getSootClass().getName()) || spec.getRule().getClassName().equals(refType.getSootClass().getShortName())) {
-													reqSeed = this.cryptoScanner.getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(this.cryptoScanner, q.stmt(), val, spec));
-													foundSeedWithSpec = true;
-													break;
-												}
+										if(ensStmt instanceof AssignStmt && q.stmt().getUnit().get() instanceof AssignStmt) {
+											// important for classes such as SecretKey, where the seed statement is an assign statement
+											AssignStmt qStmt = (AssignStmt) q.stmt().getUnit().get();
+											RefType qRefType = (RefType) qStmt.getLeftOpBox().getValue().getType();
+											String qClassName = qRefType.getSootClass().getName();
+											String qShortClassName = qRefType.getSootClass().getShortName();
+											
+											if(!ensClassName.equals(qClassName) && !ensClassName.equals(qShortClassName)) {
+												// the required seed cannot match the ensured seed
+												// they must specify the same class
+												continue;
+											}
+											if(!ensStmt.toString().equals(qStmt.toString())) {
+												// the required seed cannot match the ensured seed
+												// they must be defined on the same statement
+												continue;
 											}
 											
+											for (ClassSpecification spec : cryptoScanner.getClassSpecifictions()) {
+												// check if refType is matching type of spec
+												if (spec.getRule().getClassName().equals(qClassName) || spec.getRule().getClassName().equals(qShortClassName)) {
+													AllocVal val = new AllocVal(qStmt.getLeftOp(), q.stmt().getMethod(), qStmt.getRightOp(), new Statement(qStmt, q.stmt().getMethod()));
+													reqSeed = this.cryptoScanner.getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(this.cryptoScanner, q.stmt(), val, spec));
+													break checkValues;
+												}
+											}
 										}
-										
-									}
-									if(!foundSeedWithSpec) {
-										if(q.stmt().getUnit().get() instanceof AssignStmt) {
-											AssignStmt as = (AssignStmt) q.stmt().getUnit().get();
-											Value leftOp = as.getLeftOp();
-											AllocVal val = new AllocVal(leftOp, q.stmt().getMethod(), as.getRightOp(), new Statement(as, q.stmt().getMethod()));
-											reqSeed = this.cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(q.stmt(), val));
+										else if(ensStmt instanceof InvokeStmt && q.stmt().getUnit().get() instanceof InvokeStmt) {
+											// important for classes such as SecretKey, where the seed statement is an assign statement
+											InvokeStmt qStmt = (InvokeStmt) q.stmt().getUnit().get();
+											Val val = new Val(q.getValue(), q.stmt().getMethod());
+											if(val.getType() instanceof RefType) {
+												RefType qRefType = (RefType) val.getType();
+												String qClassName = qRefType.getSootClass().getName();
+												String qShortClassName = qRefType.getSootClass().getShortName();
+											
+												if(!ensClassName.equals(qClassName) && !ensClassName.equals(qShortClassName)) {
+													// the required seed cannot match the ensured seed
+													// they must specify the same class
+													continue;
+												}
+												if(!ensStmt.toString().equals(qStmt.toString())) {
+													// the required seed cannot match the ensured seed
+													// they must be defined on the same statement
+													continue;
+												}
+												
+												for (ClassSpecification spec : cryptoScanner.getClassSpecifictions()) {
+													// check if refType is matching type of spec
+													if (spec.getRule().getClassName().equals(qClassName) || spec.getRule().getClassName().equals(qShortClassName)) {
+														reqSeed = this.cryptoScanner.getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(this.cryptoScanner, q.stmt(), val, spec));
+														break checkValues;
+													}
+												}
+											}
 										}
 									}
 								}
 							}
+						}
+						else {
+							AnalysisSeedWithEnsuredPredicate ensSeedWithEnsPred = (AnalysisSeedWithEnsuredPredicate) ensSeed;
+							checkValues:
+							for (CallSiteWithParamIndex cswpi : parameterAnalysis.getCollectedValues().keySet()) {
+								if (cswpi.getVarName().equals(param.getName())) {
+									for(ExtractedValue q : parameterAnalysis.getCollectedValues().get(cswpi)) {
+										if(ensStmt instanceof AssignStmt && q.stmt().getUnit().get() instanceof AssignStmt) {
+											AssignStmt as = (AssignStmt) q.stmt().getUnit().get();
+											Value leftOp = as.getLeftOp();
+											AllocVal val = new AllocVal(leftOp, q.stmt().getMethod(), as.getRightOp(), new Statement(as, q.stmt().getMethod()));
+											reqSeed = this.cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(q.stmt(), val));
+											break checkValues;
+										}
+										else if(ensStmt instanceof InvokeStmt && q.stmt().getUnit().get() instanceof InvokeStmt) {
+											Val val = new Val(q.getValue(), q.stmt().getMethod());
+											reqSeed = this.cryptoScanner.getOrCreateSeed(new Node<Statement, Val>(q.stmt(), val));
+											break checkValues;
+										}
+										else {
+											// TODO this should be done better
+											if(q.stmt().getMethod().getActiveBody().getUnits().contains(ensStmt)) {
+												reqSeed = ensSeed;
+											}	
+										}
+									}
+								}
+							}
+							
 						}
 						
 					}
@@ -929,7 +999,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 	}
 
-	private final static List<String> trackedTypes = Arrays.asList("java.lang.String", "int", "java.lang.Integer");
+	public final static List<String> trackedTypes = Arrays.asList("java.lang.String", "int", "java.lang.Integer");
 
 	private boolean isOfNonTrackableType(String varName) {
 		for (Entry<String, String> object : spec.getRule().getObjects()) {
