@@ -695,6 +695,9 @@ public class CrySLModelReader {
 			conditional = getConstraint((Constraint) cons);
 		} else if (cons instanceof Pred) {
 			conditional = getPredicate((Pred) cons);
+			conditional = ((CrySLPredicate) conditional).setNegated(false);
+			// TODO: conditional cannot be negated by design, but will always be negated when pred is negated
+			
 		}
 		if (innerPred.getPred().getParList() != null) {
 			// TODO: add method to crysl supar that return, wether it is "this" or "_" or not
