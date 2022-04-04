@@ -1,0 +1,26 @@
+SPEC main.prefined.Order
+
+OBJECTS	
+	byte[] thisHasToBeHereForNoReasonButNullPointer;
+	
+EVENTS
+	cons: Order();
+	simpleEvent: simpleEvent();
+	simpleEventPlus: simpleEventPlus();
+	simpleEventStar: simpleEventStar();
+	simpleEventOptional: simpleEventOptional();
+	multiEventOr1: multiEventOr1();
+	multiEventOr2: multiEventOr2();
+	multiEventPlusOr1: multiEventPlusOr1();
+	multiEventPlusOr2: multiEventPlusOr2();
+	multiEventPlusComma1: multiEventPlusComma1();
+	multiEventPlusComma2: multiEventPlusComma2();
+	multiEventStarOr1: multiEventStarOr1();
+	multiEventStarOr2: multiEventStarOr2();
+	multiEventStarComma1: multiEventStarComma1();
+	multiEventStarComma2: multiEventStarComma2();
+	
+ORDER
+	cons, simpleEvent , simpleEventPlus+ , simpleEventStar* , simpleEventOptional? , (multiEventOr1 | multiEventOr2), (multiEventPlusOr1 | multiEventPlusOr2)+ , (multiEventPlusComma1, multiEventPlusComma2)+ , (multiEventStarOr1 | multiEventStarOr2)* , (multiEventStarComma1, multiEventStarComma2)*
+
+	
