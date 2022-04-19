@@ -17,6 +17,7 @@ import crypto.rules.StateNode;
 import crypto.rules.TransitionEdge;
 import de.darmstadt.tu.crossing.crySL.Event;
 import de.darmstadt.tu.crossing.crySL.Expression;
+import de.darmstadt.tu.crossing.crySL.RequiredBlock;
 
 /**
  * This class will build a {@FiniteStateMachine} for a given ORDER expression from crysl rules.
@@ -29,10 +30,14 @@ public class StateMachineGraphBuilder {
 	private final StateMachineGraph result;
 	private final Set<CrySLMethod> allMethods;
 	
-	public StateMachineGraphBuilder(final Expression order) {
+	public StateMachineGraphBuilder(final Expression order, final RequiredBlock events) {
 		this.order = order;
 		this.allMethods = retrieveAllMethodsFromEVENTSBlock(events);
 		this.result = new StateMachineGraph();
+	}
+	
+	private Set<CrySLMethod> retrieveAllMethodsFromEVENTSBlock(RequiredBlock events){
+		return events.getReq_event().parallelStream().flatMap(event -> CryslReaderUtils.resolveAggregateToMethodeNames(event).stream()).collect(Collectors.toSet());
 	}
 	
 	/**
@@ -144,24 +149,9 @@ public class StateMachineGraphBuilder {
 				for(TransitionEdge newEdge: newOutgoingEdgesOnStartNodes) {
 					endNodes.forEach(endNode -> this.result.createNewEdge(newEdge.getLabel(), endNode, newEdge.getRight()));	
 				}
-				//Set<StateNode> endNotesToAggr = parseOrderAndGetEndStates(order, endNodes, true);
-				//this.result.aggregateNodestoOtherNodes(endNotesToAggr, endNodes);
-			} else if(elementop.equals("*")){
-				// endNodes = Lists.newArrayList(this.result.aggregateNodestoOtherNodes(endNodes, startNodes));
-				// TODO this needs more logic
-				// a* => start--a--> end => start--a-->start
-				// shoud actually be converted to (a+)?
-				// start--a-->end , end--a-->end, endNodes=[start, end]
-				// otherwise a*|b* will be (a|b)*
-				for(StateNode node: startNodes) {
-					Set<TransitionEdge> newEdges = this.result.getAllOutgoingEdges(node);
-					newEdges.removeAll(initialEdgesOnStartNodes.get(node));
-					for(TransitionEdge newEdge: newEdges) {
-						endNodes.forEach(endNode -> this.result.createNewEdge(newEdge.getLabel(), endNode, newEdge.getRight()));	
-					}
-				}
-				endNodes.addAll(startNodes);
-			} else if(elementop.equals("?")) {
+			}
+			if(!elementop.equals("+")) {
+				// elementop is "?" or "*"
 				endNodes.addAll(startNodes);
 			}
 		}
@@ -180,6 +170,5 @@ public class StateMachineGraphBuilder {
 			this.result.createNewEdge(Lists.newArrayList(), initialNode, initialNode);
 		}
 		return this.result;
-	}
-	
+	}	
 }
