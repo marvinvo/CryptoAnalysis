@@ -10,6 +10,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
+import crypto.exceptions.CryptoAnalysisParserException;
 import crypto.rules.CrySLMethod;
 import crypto.rules.StateMachineGraph;
 import crypto.rules.StateNode;
@@ -26,9 +27,11 @@ public class StateMachineGraphBuilder {
 	
 	private final Expression order;
 	private final StateMachineGraph result;
+	private final Set<CrySLMethod> allMethods;
 	
 	public StateMachineGraphBuilder(final Expression order) {
 		this.order = order;
+		this.allMethods = retrieveAllMethodsFromEVENTSBlock(events);
 		this.result = new StateMachineGraph();
 	}
 	
@@ -42,7 +45,7 @@ public class StateMachineGraphBuilder {
 	 * @param ignoreElementOp if true, it will ignore elementop (elementop=('+' | '?' | '*')). Default is false.
 	 * @return all accepting nodes, according to the order
 	 */
-	private Set<StateNode> parseOrderAndGetEndStates(Expression order, Collection<StateNode> startNodes, boolean ignoreElementOp) {
+	private Set<StateNode> parseOrderAndGetEndStates(Expression order, Collection<StateNode> startNodes) {
 		/* Having a look at the Crysl Xtext definition for the Order section, we have
 		 * -----------
 		 *
@@ -59,7 +62,11 @@ public class StateMachineGraphBuilder {
 		 * Based on this definition, the method will parse the Order section.
 		 * In detail, we seperate Order, SimpleOrder and orderEv from elementop.
 		 * To simplify this documentation, we create a synonym "ROOTS" for Order, SimpleOrder and orderEv.
-		 * As you see in the definition the elementop can be defined for any ROOT.
+		 * As you see in the definition the elementop can only be defined for any ROOT.
+		 * Further, the recursion happens within ROOT elements.
+		 * With this method, we will recursively get all end nodes for a given set of start nodes for one ROOT.
+		 * After retrieving all end nodes, it then applies the logic of the element operator.
+		 * In detail: 
 		 * 
 		 * Given start nodes, we fist append ROOT's nodes and edges according to the order and will retrieve it's end nodes.
 		 * Therefore, we have three cases:
@@ -73,60 +80,69 @@ public class StateMachineGraphBuilder {
 		 * (|):		Left side or right side should be called.
 		 * 			We recursively call this method with order.leftSide and order.rightSide, with same start nodes.
 		 * 			We retrieve our final end nodes by joining both return collections.
+		 * 			To minimize the number of nodes, we aggregate all end nodes without outgoing edges to one node.
 		 * 
 		 * Having start and end nodes, we can then modify the graph such that it applies the elementop.
 		 * Therefore, we have three cases:
-		 * ()*:		End nodes will be aggregated to the start nodes. 
-		 * 			In detail, for each transition to end nodes, a transition to each start node is created.
-		 * 			The end notes will be removed from the graph and new end nodes are the start nodes.
+		 * ()+: 	We have to create a loop, according the path in order on the end node.
+		 * 			We calculate all new edges generated on the start nodes.
+		 * 			These edges where generated according to the current order.
+		 * 			We simply create new edges from each end node to each target nodes of these edges.
 		 * ()?: 	All start nodes are also end nodes.
-		 * ()+: 	This creates a loop on the end nodes. In detail, we will recursively call this method with same order,
-		 * 			but with end nodes as start nodes.
-		 * 			We set the ignoreElementOp flag, to not end in infinity loop.
-		 * 			Then we apply same as on ()*.
+		 * ()*:		This is simply considered as (()+)?
 		 */
-		Map<StateNode, Set<TransitionEdge>> initialEdgesOnStartNodes = Maps.newHashMap(); 
-		startNodes.parallelStream().forEach(n -> initialEdgesOnStartNodes.put(n, this.result.getAllOutgoingEdges(n)));
-		Set<StateNode> endNodes = Sets.newHashSet();
+		
+		// store outgoing edges from one start node, to be able to calculate new created outgoing edges after the recursive call.
+		StateNode oneStartNode = startNodes.iterator().next(); 
+		Set<TransitionEdge> initialEdgesOnOneStartNode = this.result.getAllOutgoingEdges(oneStartNode);
+		final Set<StateNode> endNodes = Sets.newHashSet();
+		// first create nodes end edges according to ROOT's
 		if(order.getOrderop() == null) {
-			// This must by of type Primary
+			// This must be of type Primary
+			// That is actually the end of recursion or the deepest level.
+			StateNode endNode = this.result.createNewNode();
+			endNodes.add(endNode);
+			final List<CrySLMethod> label;
 			if(!order.getOrderEv().isEmpty()) {
-				// That is actually the end of recursion or the deepest level.
-				StateNode endNode = this.result.createNewNode();
-				endNodes.add(endNode);
-				parseEvent(order.getOrderEv().get(0), startNodes, endNode);
+				// Event as label
+				label = CryslReaderUtils.resolveAggregateToMethodeNames(order.getOrderEv().get(0));
 			} else {
-				//parser error: expected to have entries in orderEv
+				// this corresponds to '*' in Order
+				// any method is allowed to call
+				label = Lists.newArrayList(allMethods);
+			}
+			// add edges from each start node to the new end node
+			for(StateNode startNode: startNodes) {
+				this.result.createNewEdge(label, startNode, endNode);
 			}
 		} else if(order.getOrderop().equals(",")) {
-			// This must by of type Order
-			Set<StateNode> leftEndNodes =  parseOrderAndGetEndStates(order.getLeft(), startNodes, false);
-			endNodes = parseOrderAndGetEndStates(order.getRight(), leftEndNodes, false);
+			// This must be of type Order
+			endNodes.addAll(parseOrderAndGetEndStates(order.getRight(), parseOrderAndGetEndStates(order.getLeft(), startNodes)));
 		} else if(order.getOrderop().equals("|")) {
 			// This must by of type SimpleOrder
-			Set<StateNode> leftEndNodes =  parseOrderAndGetEndStates(order.getLeft(), startNodes, false);
-			endNodes = parseOrderAndGetEndStates(order.getRight(), startNodes, false);
-			endNodes.addAll(leftEndNodes);
-			// TODO reduce all end nodes without outgoing edges to one node
-			Set<StateNode> nodesWithoutOutgoingEdges = endNodes.stream().filter(node -> !result.getAllTransitions().stream().map(edge -> edge.from()).anyMatch(e -> e.equals(node))).collect(Collectors.toSet());
-			if(!nodesWithoutOutgoingEdges.isEmpty()) {
-				endNodes.removeAll(nodesWithoutOutgoingEdges);
-				StateNode aggrNode = this.result.createNewNode();
+			endNodes.addAll(parseOrderAndGetEndStates(order.getLeft(), startNodes));
+			endNodes.addAll(parseOrderAndGetEndStates(order.getRight(), startNodes));
+			// reduce all end nodes without outgoing edges to one end node
+			Set<StateNode> endNodesWithOutgoingEdges = this.result.getEdges().parallelStream().map(edge -> edge.from()).filter(node -> endNodes.contains(node)).collect(Collectors.toSet());
+			if(endNodesWithOutgoingEdges.size() < endNodes.size()-1) {
+				endNodes.removeAll(endNodesWithOutgoingEdges);
+				StateNode aggrNode = this.result.aggregateNodesToOneNode(endNodes, endNodes.iterator().next());
+				endNodes.clear();
 				endNodes.add(aggrNode);
-				this.result.aggregateNodesToOneNode(nodesWithoutOutgoingEdges, aggrNode);
+				endNodes.addAll(endNodesWithOutgoingEdges);
 			}
+			
 		}
 		
 		// modify graph such that it applies elementop.
 		String elementop = order.getElementop();
-		if(!(elementop == null || ignoreElementOp)) {
-			if(elementop.equals("+")) {
-				for(StateNode node: startNodes) {
-					Set<TransitionEdge> newEdges = this.result.getAllOutgoingEdges(node);
-					newEdges.removeAll(initialEdgesOnStartNodes.get(node));
-					for(TransitionEdge newEdge: newEdges) {
-						endNodes.forEach(endNode -> this.result.createNewEdge(newEdge.getLabel(), endNode, newEdge.getRight()));	
-					}
+		if(elementop != null) {
+			if(!elementop.equals("?")) {
+				// elementop is "+" or "*"
+				Set<TransitionEdge> newOutgoingEdgesOnStartNodes = this.result.getAllOutgoingEdges(oneStartNode);
+				newOutgoingEdgesOnStartNodes.removeAll(initialEdgesOnOneStartNode);
+				for(TransitionEdge newEdge: newOutgoingEdgesOnStartNodes) {
+					endNodes.forEach(endNode -> this.result.createNewEdge(newEdge.getLabel(), endNode, newEdge.getRight()));	
 				}
 				//Set<StateNode> endNotesToAggr = parseOrderAndGetEndStates(order, endNodes, true);
 				//this.result.aggregateNodestoOtherNodes(endNotesToAggr, endNodes);
@@ -152,22 +168,11 @@ public class StateMachineGraphBuilder {
 		return endNodes;
 	}
 	
-	private void parseEvent(Event event, Collection<StateNode> startNodes, StateNode endNode) {
-		for(StateNode startState: startNodes) {
-			parseEvent(event, startState, endNode);
-		}
-	}
-	
-	private void parseEvent(Event event, StateNode startNode, StateNode endNode) {
-		final List<CrySLMethod> label = CryslReaderUtils.resolveAggregateToMethodeNames(event);
-		this.result.createNewEdge(label, startNode, endNode);
-	}
-
 	public StateMachineGraph buildSMG() {
 		StateNode initialNode = new StateNode("-1", true, true);
 		this.result.addNode(initialNode);
 		if (this.order != null) {
-			Set<StateNode> acceptingNodes = parseOrderAndGetEndStates(this.order, Sets.newHashSet(this.result.getNodes()), false);
+			Set<StateNode> acceptingNodes = parseOrderAndGetEndStates(this.order, Sets.newHashSet(this.result.getNodes()));
 			acceptingNodes.parallelStream().forEach(node -> node.setAccepting(true));
 		}
 		if(this.result.getAllTransitions().isEmpty()) {
