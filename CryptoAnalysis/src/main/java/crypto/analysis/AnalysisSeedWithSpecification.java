@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -22,10 +23,13 @@ import boomerang.jimple.AllocVal;
 import boomerang.jimple.Statement;
 import boomerang.jimple.Val;
 import boomerang.results.ForwardBoomerangResults;
+import crypto.analysis.errors.AbstractError;
 import crypto.analysis.errors.IncompleteOperationError;
+import crypto.analysis.errors.RequiredPredicateError;
 import crypto.analysis.errors.TypestateError;
 import crypto.constraints.ConstraintSolver;
 import crypto.constraints.ConstraintSolver.EvaluableConstraint;
+import crypto.extractparameter.CallSiteWithExtractedValue;
 import crypto.extractparameter.CallSiteWithParamIndex;
 import crypto.extractparameter.ExtractParameterAnalysis;
 import crypto.extractparameter.ExtractedValue;
@@ -313,10 +317,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 					// Create an ensured pred.
 					// Based on constraints or predicate condition, this will be either an EnsuredCrySLPredicate or DarkPredicate. 
 					EnsuredCrySLPredicate ensuredPred;
-					if(satisfiesConstraintSytem && predToBeEnsured.getConstraint() == null 
-					   // predicate has no condition and constraint system is satisfied
-							|| predToBeEnsured.getConstraint() != null && isPredConditionSatisfied(predToBeEnsured)) 
-							// predicate has condition and condition is satisfied 
+					if(satisfiesConstraintSytem && isPredConditionSatisfied(predToBeEnsured))
 					{ 
 						ensuredPred = new EnsuredCrySLPredicate(predToBeEnsured, parameterAnalysis.getCollectedValues());
 					} else {
@@ -614,7 +615,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				}
 			}
 			else {
-				if(!existingPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), ensPred))) {
+				if(existingPredicates.isEmpty() || !existingPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), ensPred))) {
 					// predicate is not ensured, but is required to be ensured
 					if(isPredConditionSatisfied(reqPred.getPred())) {
 						// also condition is satisfied
@@ -666,22 +667,16 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 					if(reqPred.getPred().isNegated()){
 						if(existingEnsuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), ensPred))) {
 							// predicate is ensured, but is required to be not ensured
-							remainingRequiredPredicates.add(reqPred);
+							// throw a predicate contradiction error
+							// remainingRequiredPredicates.add(reqPred);
 						}
 					}
 					else {
-						if(!existingEnsuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), ensPred))) {
+						if(existingEnsuredPredicates.isEmpty() || !existingEnsuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), ensPred))) {
 							// predicate is not ensured, but is required to be ensured
-							remainingRequiredPredicates.add(reqPred);
-							// now check, if a dark predicate is ensuring the pred
-							Collection<DarkPredicate> darkPredsThatEnsureRequiredPred = existingDarkPredicates.parallelStream().filter(darkPred -> darkPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), darkPred)).collect(Collectors.toList());
-							if(darkPredsThatEnsureRequiredPred.isEmpty()) {
-								// found no matching dark pred
-								remainingRequiredPredicatesWithDarkPreds.add(reqPred);
-							}
-							else {
-								usedDarkPredicates.addAll(darkPredsThatEnsureRequiredPred);
-							}
+							// throw a required predicate error
+							
+							reportRequiredPredicateError(reqPred);
 						}
 					}
 				}
@@ -701,16 +696,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 							// also no positiv alternative pred is ensured
 							// hence the alternative pred is not ensured
 							remainingRequiredPredicates.add(pred);
-							// now check if any alternative preds are ensured with dark preds
-							// this can only be the case for positiv preds
-							Collection<DarkPredicate> darkPredsThatEnsureAnyPositiveAlternativePred = existingDarkPredicates.parallelStream().filter(darkPred -> positives.parallelStream().anyMatch(reqPred -> darkPred.getPredicate().equals(reqPred) && doPredsParametersMatch(reqPred, darkPred))).collect(Collectors.toList());
-							if(darkPredsThatEnsureAnyPositiveAlternativePred.isEmpty()) {
-								// found no matching dark pred
-								remainingRequiredPredicatesWithDarkPreds.addAll(alternatives);
-							}
-							else {
-								usedDarkPredicates.addAll(darkPredsThatEnsureAnyPositiveAlternativePred);
-							}
 						}
 					}
 				}
@@ -740,6 +725,34 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 	}
 	
+	public Collection<AbstractError> reportAndReturnIfPredConditionNotSatisfied(ISLConstraint conditional) {
+		if (conditional == null) {
+			return Sets.newHashSet();
+		}
+		//condition could be a constraint or a pred
+		if(conditional instanceof CrySLPredicate && !ConstraintSolver.predefinedPreds.contains(((CrySLPredicate) conditional).getPredName())) {
+			if(fastCheckRequiredPredicate(new RequiredCrySLPredicate((CrySLPredicate)conditional, null), this.ensuredPredicates)) {
+				// condition is satisfied
+				return Sets.newHashSet();
+			} else {
+				// condition  is not satisfied
+				RequiredCrySLPredicate missingPred = retrieveValuesForPred(conditional);
+				if(missingPred == null) {
+					return Sets.newHashSet();
+				}
+				return reportRequiredPredicateError(missingPred);
+			}
+		}
+		else {
+			EvaluableConstraint evalCons = constraintSolver.createConstraint(conditional);
+			evalCons.evaluate();
+			if (evalCons.hasErrors()) {
+				return evalCons.getErrors();
+			}
+			return Sets.newHashSet();
+		}
+	}
+
 	private boolean doPredsParametersMatch(CrySLPredicate pred, EnsuredCrySLPredicate ensPred) {
 		if(pred.getParameters().size() != ensPred.getParameterToAnalysisSeed().length) {
 			return false;
@@ -918,55 +931,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		return true;
 	}
 
-	private boolean oldDoPredsParametersMatch(CrySLPredicate pred, EnsuredCrySLPredicate ensPred) {
-		boolean requiredPredicatesExist = true;
-		for (int i = 0; i < pred.getParameters().size(); i++) {
-			String var = pred.getParameters().get(i).getName();
-			if (isOfNonTrackableType(var)) {
-				if(var.equals("this") && !ensPred.getPredicate().getParameters().get(i).getName().equals("this")) {
-					return false;
-				}
-				continue;
-			} else if (pred.getInvolvedVarNames().contains(var)) {
-				
-				final String parameterI = ensPred.getPredicate().getParameters().get(i).getName();
-				Collection<String> actVals = Collections.emptySet();
-				Collection<String> expVals = Collections.emptySet();
-
-				for (CallSiteWithParamIndex cswpi : ensPred.getParametersToValues().keySet()) {
-					if (cswpi.getVarName().equals(parameterI)) {
-						actVals = retrieveValueFromUnit(cswpi, ensPred.getParametersToValues().get(cswpi));
-					}
-				}
-				for (CallSiteWithParamIndex cswpi : parameterAnalysis.getCollectedValues().keySet()) {
-					if (cswpi.getVarName().equals(var)) {
-						expVals = retrieveValueFromUnit(cswpi, parameterAnalysis.getCollectedValues().get(cswpi));
-					}
-				}
-
-				String splitter = "";
-				int index = -1;
-				if (pred.getParameters().get(i) instanceof CrySLObject) {
-					CrySLObject obj = (CrySLObject) pred.getParameters().get(i);
-					if (obj.getSplitter() != null) {
-						splitter = obj.getSplitter().getSplitter();
-						index = obj.getSplitter().getIndex();
-					}
-				}
-				for (String foundVal : expVals) {
-					if (index > -1) {
-						foundVal = foundVal.split(splitter)[index];
-					}
-					actVals = actVals.parallelStream().map(e -> e.toLowerCase()).collect(Collectors.toList());
-					requiredPredicatesExist &= actVals.contains(foundVal.toLowerCase());
-				}
-			} else {
-				requiredPredicatesExist = false;
-			}
-		}
-		return requiredPredicatesExist;
-	}
-
 	private Collection<String> retrieveValueFromUnit(CallSiteWithParamIndex cswpi, Collection<ExtractedValue> collection) {
 		Collection<String> values = new ArrayList<String>();
 		for (ExtractedValue q : collection) {
@@ -997,6 +961,65 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		} else {
 			return "";
 		}
+	}
+	
+	public Statement retriveFirstStatementForParameterList(Collection<ICrySLPredicateParameter> parameters) {
+		for(ICrySLPredicateParameter param: parameters) {
+			Statement stmt = retrieveStatementForName(param.getName());
+			if(stmt != null) {
+				return stmt;
+			}
+		}
+		return null;
+	}
+	
+	public Statement retrieveStatementForName(String name) {
+		if (name.equals("transformation"))
+			return null;
+		if(name.equals("this"))
+			return this.stmt();
+		for (CallSiteWithParamIndex cwpi : this.parameterAnalysis.getAllQuerySites()) {
+			if (cwpi.getVarName().equals(name)) {
+				return cwpi.stmt();
+			}
+		}
+		return null;
+	}
+	
+	private Collection<AbstractError> reportRequiredPredicateError(RequiredCrySLPredicate missingPred) {
+		Collection<AbstractError> errors = generateRequiredPredicateError(missingPred);
+		for(AbstractError error: errors) {
+			this.addError(error);
+			this.cryptoScanner.getAnalysisListener().reportError(this, error);
+		}
+		return errors;
+	}
+	
+	public Collection<AbstractError> generateRequiredPredicateError(RequiredCrySLPredicate missingPred){
+		Collection<AbstractError> errors = Sets.newHashSet();
+		for(CallSiteWithParamIndex v : this.getParameterAnalysis().getAllQuerySites()) {
+			if (missingPred.getInvolvedVarNames().contains(v.getVarName()) && missingPred.getLocation().equals(v.stmt())) {
+				RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), this.getSpec().getRule(), new CallSiteWithExtractedValue(v, null));
+				errors.add(e);
+			}
+		}
+		// TODO Refactor
+		if(missingPred.getPred().getParameters().stream().anyMatch(param -> param instanceof CrySLObject && ((CrySLObject) param).getName().equals("this"))) {
+			// edge cases that would produce new errors
+			RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), this.getSpec().getRule(), new CallSiteWithExtractedValue(new CallSiteWithParamIndex(missingPred.getLocation(), null, 0, "this"), null));
+			if(getSpec().getRule().getClassName().equals("javax.crypto.SecretKey") && missingPred.getPred().getPredName().equals("generatedKey")) {
+				return errors;
+			}
+			if(getSpec().getRule().getClassName().equals("java.security.KeyPair") && missingPred.getPred().getPredName().equals("generatedKeypair")) {
+				return errors;
+			}
+			errors.add(e);
+		}
+		return errors;
+	}
+	
+	public Collection<DarkPredicate> getMatchingDarkPredicates(CrySLPredicate pred) {
+		return darkPredicates.stream().filter(darkPred -> darkPred.getPredicate().getPredName().equals(pred.getPredName()) && doPredsParametersMatch(pred, darkPred)).collect(Collectors.toSet());
 	}
 
 	public final static List<String> trackedTypes = Arrays.asList("java.lang.String", "int", "java.lang.Integer");
@@ -1031,6 +1054,24 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			}
 		}
 		return false;
+	}
+	
+	public RequiredCrySLPredicate retrieveValuesForPred(ISLConstraint cons) {
+		CrySLPredicate pred = (CrySLPredicate) cons;
+		for (CallSiteWithParamIndex cwpi : this.parameterAnalysis.getAllQuerySites()) {
+			for (ICrySLPredicateParameter p : pred.getParameters()) {
+				// TODO: FIX Cipher rule
+				if (p.getName().equals("transformation"))
+					continue;
+				if (cwpi.getVarName().equals(p.getName())) {
+					return new RequiredCrySLPredicate(pred, cwpi.stmt());
+				}
+			}
+		}
+		if(pred.getParameters().stream().anyMatch(param -> param.getName().equals("this"))) {
+			return new RequiredCrySLPredicate(pred, this.stmt());
+		}
+		return null;
 	}
 	
 	//

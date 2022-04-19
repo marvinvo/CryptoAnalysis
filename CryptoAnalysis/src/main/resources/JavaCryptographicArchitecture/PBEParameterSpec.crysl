@@ -17,8 +17,7 @@ CONSTRAINTS
 	iterationCount >= 10000;	
 
 REQUIRES
-	randomized[salt];
 			
 ENSURES
-	preparedPBE[this];
+	randomized[salt] => preparedPBE[this];
 	

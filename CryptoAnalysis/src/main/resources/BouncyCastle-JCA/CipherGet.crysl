@@ -1,0 +1,109 @@
+SPEC javax.crypto.Cipher
+
+OBJECTS
+	java.lang.String transformation;
+	int encmode;
+	java.security.Key key;
+	java.security.cert.Certificate certificate;
+	java.security.spec.AlgorithmParameterSpec paramSpec;
+	java.security.AlgorithmParameters params;
+    
+	int prePlainTextOffset;
+	int preCipherTextOffset;
+	int plainTextOffset;
+	int cipherTextOffset;
+	int aadOffset;
+    
+	int prePlainTextLen;
+	int plainTextLen;
+	int aadLen;
+    
+	byte[] prePlainText;
+	byte[] preCipherText;
+	java.nio.ByteBuffer prePlainTextByteBuffer;
+	java.nio.ByteBuffer preCipherTextByteBuffer;
+    
+	byte[] plainText;
+	byte[] cipherText;
+	byte[] wrappedKeyBytes;
+	java.nio.ByteBuffer plainTextByteBuffer;
+	java.nio.ByteBuffer cipherTextByteBuffer;
+	
+	byte[] aadBytes;
+	java.nio.ByteBuffer aadByteBuffer;
+	
+	java.security.SecureRandom random;
+	
+	java.security.Key wrappedKey;
+
+EVENTS
+	g1: getInstance(transformation);
+	g2: getInstance(transformation, _);
+	Get := g1 | g2;
+
+	i1: init(_, certificate);
+	i2: init(_, certificate, _);
+	i3: init(_, key);
+	i4: init(_, key, _);
+	i5: init(_, key, _, _);
+	Init := i1 | i2 | i3 | i4 | i5;
+
+	u1: update(_);
+	u2: update(_, _, _);
+	u3: update(_, _, _, _);
+	u4: update(_, _, _, _, _);
+	u5: update(_, _);
+	Update := u1 | u2 | u3 | u4 | u5;
+	
+	ua1: updateAAD(_);
+	ua2: updateAAD(_, _, _);
+	AADUpdate := ua1 | ua2;
+	
+	f1: doFinal();
+	f2: doFinal(_);
+	f3: doFinal(_, _);
+	f4: doFinal(_, _, _);
+	f5: doFinal(_, _, _, _);
+	f6: doFinal(_, _, _, _, _);
+	DoFinal := f1 | f2 | f3 | f4 | f5 | f6;
+    
+	wkb1: wrap(_);
+	WKB := wkb1;
+    
+	iv1: getIV();
+	IV := iv1;
+    
+ORDER
+	Get, (*)*
+
+CONSTRAINTS
+	alg(transformation) in {"AES"} => mode(transformation) in {"CBC", "GCM", "PCBC", "CTR", "CTS", "CFB", "OFB"};
+	alg(transformation) in {"PBEWithHmacSHA224AndAES_128", "PBEWithHmacSHA256AndAES_128", "PBEWithHmacSHA384AndAES_128", 
+				"PBEWithHmacSHA512AndAES_128", "PBEWithHmacSHA224AndAES_256", "PBEWithHmacSHA256AndAES_256", 
+				"PBEWithHmacSHA384AndAES_256", "PBEWithHmacSHA512AndAES_256"} => mode(transformation) in {"CBC"};
+	alg(transformation) in {"RSA"} => mode(transformation) in {"", "ECB"};
+
+	alg(transformation) in {"PBEWithHmacSHA224AndAES_128", "PBEWithHmacSHA256AndAES_128", "PBEWithHmacSHA384AndAES_128", 
+				"PBEWithHmacSHA512AndAES_128", "PBEWithHmacSHA224AndAES_256", "PBEWithHmacSHA256AndAES_256", 
+				"PBEWithHmacSHA384AndAES_256", "PBEWithHmacSHA512AndAES_256"} => pad(transformation) in {"PKCS5Padding"};
+	alg(transformation) in {"RSA"} && mode(transformation) in {""} => pad(transformation) in {""};
+	alg(transformation) in {"RSA"} && mode(transformation) in {"ECB"} => pad(transformation) in {"NoPadding", "PKCS1Padding", 
+											"OAEPWithMD5AndMGF1Padding", "OAEPWithSHA-224AndMGF1Padding", 
+											"OAEPWithSHA-256AndMGF1Padding", "OAEPWithSHA-384AndMGF1Padding", 
+											"OAEPWithSHA-512AndMGF1Padding"};
+	
+	alg(transformation) in {"AES"} && mode(transformation) in {"CBC", "PCBC"} => pad(transformation) in {"PKCS5Padding", "ISO10126Padding"};
+	alg(transformation) in {"AES"} && mode(transformation) in {"GCM", "CTR", "CTS", "CFB", "OFB"} => pad(transformation) in {"NoPadding"};     
+    
+REQUIRES
+	generatedKey[key, alg(transformation)];
+	
+ENSURES
+	mode(transformation) in {"CBC", "PCBC", "CTR", "CTS", "CFB", "OFB"} => reqiuresIV[this];
+	mode(transformation) in {"GCM"} => requiresGCM[this];
+	mode(transformation) in {"OAEPWithMD5AndMGF1Padding", "OAEPWithSHA-224AndMGF1Padding", "OAEPWithSHA-256AndMGF1Padding", 
+				"OAEPWithSHA-384AndMGF1Padding", "OAEPWithSHA-512AndMGF1Padding"} => requiresOAEP[this];
+				
+	alg(transformation) in {"AES"} => requiresSecretKey[this];
+	
+	mode(transformation) in {"CBC"} => preparedCipherModeCBC[this];

@@ -14,8 +14,7 @@ ORDER
 	Cons
 	
 REQUIRES
-	randomized[iv];
-	
+
 ENSURES
-	preparedIV[this];
+	randomized[iv] => preparedIV[this];;
 	

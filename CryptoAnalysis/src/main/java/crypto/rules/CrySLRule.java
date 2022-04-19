@@ -60,7 +60,11 @@ public class CrySLRule implements java.io.Serializable {
 	
 	@Override
 	public int hashCode() {
-		return 31 * className.hashCode();
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + className.hashCode();
+		result = prime * result + usagePattern.hashCode();
+		return result;
 	}
 
 

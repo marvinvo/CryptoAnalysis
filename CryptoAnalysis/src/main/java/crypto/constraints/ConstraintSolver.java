@@ -98,7 +98,7 @@ public class ConstraintSolver {
 
 			if (involvedVarNames.isEmpty() || (cons.toString().contains("speccedKey") && involvedVarNames.size() == 1)) {
 				if (cons instanceof CrySLPredicate) {
-					RequiredCrySLPredicate pred = retrieveValuesForPred(cons);
+					RequiredCrySLPredicate pred = object.retrieveValuesForPred(cons);
 					if (pred != null) {
 						CrySLPredicate innerPred = pred.getPred();
 						if (innerPred != null) {
@@ -134,7 +134,7 @@ public class ConstraintSolver {
 	 */
 	private ISLConstraint collectAlternativePredicates(CrySLConstraint cons, AlternativeReqPredicate alt) {
 		CrySLPredicate right = (CrySLPredicate) cons.getRight();
-		RequiredCrySLPredicate reqPred = retrieveValuesForPred(right);
+		RequiredCrySLPredicate reqPred = object.retrieveValuesForPred(right);
 		right.setLocation(reqPred.getLocation());
 		if (alt == null) {
 			alt = new AlternativeReqPredicate(right, right.getLocation());
@@ -144,7 +144,7 @@ public class ConstraintSolver {
 
 		if (cons.getLeft() instanceof CrySLPredicate) {
 			CrySLPredicate left = (CrySLPredicate) cons.getLeft();
-			RequiredCrySLPredicate reqLeft = retrieveValuesForPred(left);
+			RequiredCrySLPredicate reqLeft = object.retrieveValuesForPred(left);
 			left.setLocation(reqLeft.getLocation());
 			alt.addAlternative(left);
 		} else {
@@ -154,23 +154,6 @@ public class ConstraintSolver {
 		return alt;
 	}
 
-	private RequiredCrySLPredicate retrieveValuesForPred(ISLConstraint cons) {
-		CrySLPredicate pred = (CrySLPredicate) cons;
-		for (CallSiteWithParamIndex cwpi : this.parameterAnalysisQuerySites) {
-			for (ICrySLPredicateParameter p : pred.getParameters()) {
-				// TODO: FIX Cipher rule
-				if (p.getName().equals("transformation"))
-					continue;
-				if (cwpi.getVarName().equals(p.getName())) {
-					return new RequiredCrySLPredicate(pred, cwpi.stmt());
-				}
-			}
-		}
-		if(pred.getParameters().stream().anyMatch(param -> param.getName().equals("this"))) {
-			return new RequiredCrySLPredicate(pred, object.stmt());
-		}
-		return null;
-	}
 
 	private static String retrieveConstantFromValue(Value val) {
 		if (val instanceof StringConstant) {
@@ -258,14 +241,10 @@ public class ConstraintSolver {
 				errors.addAll(right.getErrors());
 				return;
 			} else if (ops.equals(LogOps.and)) {
-				if (left.hasErrors()) {
-					errors.addAll(left.getErrors());
-					return;
-				} else {
-					right.evaluate();
-					errors.addAll(right.getErrors());
-					return;
-				}
+				right.evaluate();
+				errors.addAll(left.getErrors());
+				errors.addAll(right.getErrors());
+				return;
 			} else if (ops.equals(LogOps.eq)) {
 				right.evaluate();
 				if ((left.hasErrors() && right.hasErrors()) || (!left.hasErrors() && !right.hasErrors())) {
@@ -624,7 +603,7 @@ public class ConstraintSolver {
 			origin = con;
 		}
 
-		protected Collection<AbstractError> getErrors() {
+		public Collection<AbstractError> getErrors() {
 			return errors;
 		};
 

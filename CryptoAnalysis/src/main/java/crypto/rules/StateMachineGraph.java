@@ -25,6 +25,14 @@ public final class StateMachineGraph implements FiniteStateMachine<StateNode>, j
 		edges = new ArrayList<TransitionEdge>();
 	}
 	
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + edges.hashCode();
+		return result;
+	}
+	
 	public StateNode createNewNode() {
 		StateNode node = new StateNode(String.valueOf(this.nodeNameCounter++), false, false);
 		this.nodes.add(node);
