@@ -16,18 +16,19 @@ EVENTS
 	ClearPass: clearPassword();
 	
 ORDER
-	Con, ClearPass
+ 	Con, ClearPass
  	
 CONSTRAINTS
 	iterationCount >= 10000;
 	neverTypeOf[password, java.lang.String];
-	notHardCoded[password];
-	
+	notHardCoded[password] ;
+
 REQUIRES
-
+	randomized[salt];	
+	
 ENSURES
-	randomized[salt] => speccedKey[this, keylength] after Con;
-
+	speccedKey[this, keylength] after Con;
+	
 NEGATES
 	speccedKey[this, _] after ClearPass;
 	

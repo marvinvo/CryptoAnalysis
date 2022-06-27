@@ -1,29 +1,19 @@
 package crypto.analysis.errors;
 
 import boomerang.jimple.Statement;
-import crypto.analysis.AnalysisSeedWithSpecification;
 import crypto.extractparameter.CallSiteWithExtractedValue;
 import crypto.rules.CrySLPredicate;
 import crypto.rules.CrySLRule;
 
-public class RequiredPredicateError extends AbstractError {
+public class RequiredPredicateError extends AbstractError{
 
 	private CrySLPredicate contradictedPredicate;
 	private CallSiteWithExtractedValue extractedValues;
-	private AnalysisSeedWithSpecification seed;
 
 	public RequiredPredicateError(CrySLPredicate contradictedPredicate, Statement location, CrySLRule rule, CallSiteWithExtractedValue multimap) {
 		super(location, rule);
 		this.contradictedPredicate = contradictedPredicate;
 		this.extractedValues = multimap;
-	}
-	
-	public void setSeed(AnalysisSeedWithSpecification seed) {
-		this.seed = seed;
-	}
-	
-	public AnalysisSeedWithSpecification getSeed() {
-		return this.seed;
 	}
 
 	public CrySLPredicate getContradictedPredicate() {

@@ -82,7 +82,7 @@ public class CrySLRuleReader {
 
 			if(rule != null) {
 				if(!ruleMap.containsKey(rule.getClassName())) {
-					ruleMap.put(file.getName(), rule);
+					ruleMap.put(rule.getClassName(), rule);
 				}
 			}
 		}

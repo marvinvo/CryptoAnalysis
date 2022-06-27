@@ -39,7 +39,7 @@ public class AnalysisSeedWithEnsuredPredicate extends IAnalysisSeed{
 		ExtendedIDEALAnaylsis solver = getOrCreateAnalysis();
 		solver.run(this);
 		analysisResults = solver.getResults();
-		for(EnsuredCrySLPredicate pred : Sets.newHashSet(ensuredPredicates))
+		for(EnsuredCrySLPredicate pred : ensuredPredicates)
 			ensurePredicates(pred);
 		cryptoScanner.getAnalysisListener().onSeedFinished(this, analysisResults);
 		analyzed = true;

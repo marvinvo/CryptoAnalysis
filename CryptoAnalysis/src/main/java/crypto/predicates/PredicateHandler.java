@@ -6,7 +6,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -233,7 +232,18 @@ public class PredicateHandler {
 
 	private void checkMissingRequiredPredicates() {
 		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
-			seed.getMissingPredicates();
+			Collection<ISLConstraint> missingPredicates = seed.getMissingPredicates();
+			for (ISLConstraint pred : missingPredicates) {
+				if (pred instanceof RequiredCrySLPredicate) {
+					reportMissingPred(seed, (RequiredCrySLPredicate) pred);
+				} else if (pred instanceof AlternativeReqPredicate) {
+					for (CrySLPredicate altPred : ((AlternativeReqPredicate) pred).getAlternatives()) {
+						// TODO create a dedicated error for alternative predicates
+						// they are connected with a logical or -> the error should point that out
+						reportMissingPred(seed, new RequiredCrySLPredicate(altPred, pred.getLocation()));
+					}
+				}
+			}
 		}
 	}
 	
@@ -242,40 +252,25 @@ public class PredicateHandler {
 	 * The subsequent and parent errors are stored by each error itself.
 	 */
 	private void setSubsequentAndRootErrorsForEachError() {
-		List<RequiredPredicateError> queue = Lists.newArrayList();
 		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
-			for(AbstractError err: seed.getErrors()) {
-				if(err instanceof RequiredPredicateError) {
-					((RequiredPredicateError)err).setSeed(seed);
-					queue.add((RequiredPredicateError)err);
-				}
-			}
-		}
-		while(!queue.isEmpty()) {
-			RequiredPredicateError error = queue.remove(0);
-			AnalysisSeedWithSpecification seed = error.getSeed();
-			Collection<DarkPredicate> ensuringDarkPreds = seed.getMatchingDarkPredicates(error.getContradictedPredicate());
-			if(!ensuringDarkPreds.isEmpty()) {
-				// error is subsequent
-				DarkPredicate darkPred = ensuringDarkPreds.iterator().next();
-				Collection<AbstractError> previousErrorsCausingPredToBeDark = Sets.newHashSet(((AnalysisSeedWithSpecification)darkPred.getRoot()).getErrors());
-				if(darkPred.getPredicate().getConstraint() != null) {
-					Collection<AbstractError> previousMissingConstraintError = ((AnalysisSeedWithSpecification)darkPred.getRoot()).reportAndReturnIfPredConditionNotSatisfied(darkPred.getPredicate().getConstraint());
-					for(AbstractError err: previousMissingConstraintError) {
-						if(err instanceof RequiredPredicateError) {
-							((RequiredPredicateError)err).setSeed((AnalysisSeedWithSpecification)darkPred.getRoot());
-							queue.add((RequiredPredicateError)err);
-						}
+			Collection<ISLConstraint> missingPredicatesWithDarkPreds = seed.getMissingPredicatesWithDarkPreds();
+			Collection<DarkPredicate> usedDarkPreds = seed.getNeededDarkPreds();
+			for (AbstractError e: seed.getErrors()) {
+				if(e instanceof RequiredPredicateError) {
+					// only RequiredPredicateError can be a subsequent error
+					RequiredPredicateError error = (RequiredPredicateError) e;
+					if(missingPredicatesWithDarkPreds.isEmpty() || !missingPredicatesWithDarkPreds.contains(error.getContradictedPredicate())) {
+						// this errors predicate was ensured with dark predicates
+						// hence the error is subsequent
+						Collection<DarkPredicate> darkPredsThatEnsureMissingPredicate = usedDarkPreds.parallelStream().filter(p -> p.getPredicate().equals(error.getContradictedPredicate())).collect(Collectors.toSet());
+						// connect parent errors with this error
+						Collection<AbstractError> parentErrors = darkPredsThatEnsureMissingPredicate.parallelStream().flatMap(pred -> pred.getRoot().getErrors().stream()).collect(Collectors.toSet());
+						error.addCausingError(parentErrors);
+						parentErrors.parallelStream().forEach(parentErr -> parentErr.addSubsequentError(error));
 					}
-					previousErrorsCausingPredToBeDark.addAll(previousMissingConstraintError);
 				}
-				error.addCausingError(previousErrorsCausingPredToBeDark);
-				previousErrorsCausingPredToBeDark.forEach(err -> err.addSubsequentError(error));
-				
-				
 			}
 		}
-		
 	}
 	
 	private Map<AbstractError, Set<AbstractError>> buildUpSubsequentErrorStack() {
@@ -404,14 +399,13 @@ public class PredicateHandler {
 		return report;
 	}
 
-	private Collection<RequiredPredicateError> reportMissingPred(AnalysisSeedWithSpecification seed, RequiredCrySLPredicate missingPred) {
+	private void reportMissingPred(AnalysisSeedWithSpecification seed, RequiredCrySLPredicate missingPred) {
 		CrySLRule rule = seed.getSpec().getRule();
-		Collection<RequiredPredicateError> errors = Sets.newHashSet();
+		if (!rule.getPredicates().parallelStream().anyMatch(e -> missingPred.getPred().getPredName().equals(e.getPredName()) && missingPred.getPred().getParameters().get(0).equals(e.getParameters().get(0)))) {
 			for (CallSiteWithParamIndex v : seed.getParameterAnalysis().getAllQuerySites()) {
 				if (missingPred.getInvolvedVarNames().contains(v.getVarName()) && missingPred.getLocation().equals(v.stmt())) {
 					RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(v, null));
 					seed.addError(e);
-					errors.add(e);
 					cryptoScanner.getAnalysisListener().reportError(seed, e);
 				}
 			}
@@ -421,15 +415,14 @@ public class PredicateHandler {
 				RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(new CallSiteWithParamIndex(missingPred.getLocation(), null, 0, "this"), null));
 				seed.addError(e);
 				if(rule.getClassName().equals("javax.crypto.SecretKey") && missingPred.getPred().getPredName().equals("generatedKey")) {
-					return errors;
+					return;
 				}
 				if(rule.getClassName().equals("java.security.KeyPair") && missingPred.getPred().getPredName().equals("generatedKeypair")) {
-					return errors;
+					return;
 				}	
 				cryptoScanner.getAnalysisListener().reportError(seed, e);
-				errors.add(e);
 			}
-			return errors;
+		}
 	}
 
 	private void checkForContradictions() {
