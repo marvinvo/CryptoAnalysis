@@ -9,6 +9,9 @@ EVENTS
 ORDER
 	GetEnc*
 	
+REQUIRES
+	generatedKey[this, _];
+	
 ENSURES
 	preparedKeyMaterial[keyMaterial] after GetEnc;
 	

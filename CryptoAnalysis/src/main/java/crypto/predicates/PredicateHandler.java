@@ -145,10 +145,6 @@ public class PredicateHandler {
 	}
 
 	public boolean addNewPred(IAnalysisSeed seedObj, Statement statement, Val variable, EnsuredCrySLPredicate ensPred) {
-		if(!cryptoScanner.getSettings().isSubsequentErrorDetection() && ensPred instanceof DarkPredicate) {
-			// subsequent error detection is disabled
-			return false;
-		}
 		Set<EnsuredCrySLPredicate> set = getExistingPredicates(statement, variable);
 		boolean added = set.add(ensPred);
 		assert existingPredicates.get(statement, variable).contains(ensPred);
@@ -236,18 +232,7 @@ public class PredicateHandler {
 
 	private void checkMissingRequiredPredicates() {
 		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
-			Collection<ISLConstraint> missingPredicates = seed.getMissingPredicates();
-			for (ISLConstraint pred : missingPredicates) {
-				if (pred instanceof RequiredCrySLPredicate) {
-					reportMissingPred(seed, (RequiredCrySLPredicate) pred);
-				} else if (pred instanceof CrySLConstraint) {
-					for (CrySLPredicate altPred : ((AlternativeReqPredicate) pred).getAlternatives()) {
-						// TODO create a dedicated error for alternative predicates
-						// they are connected with a logical or -> the error should point that out
-						reportMissingPred(seed, new RequiredCrySLPredicate(altPred, pred.getLocation()));
-					}
-				}
-			}
+			seed.checkAndReportMissingRequiredPredicates();
 		}
 	}
 	
@@ -257,174 +242,10 @@ public class PredicateHandler {
 	 */
 	private void setSubsequentAndRootErrorsForEachError() {
 		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
-			Collection<ISLConstraint> missingPredicatesWithDarkPreds = seed.getMissingPredicatesWithDarkPreds();
-			Collection<DarkPredicate> usedDarkPreds = seed.getNeededDarkPreds();
 			for (AbstractError e: seed.getErrors()) {
 				if(e instanceof RequiredPredicateError) {
-					// only RequiredPredicateError can be a subsequent error
-					RequiredPredicateError error = (RequiredPredicateError) e;
-					if(missingPredicatesWithDarkPreds.isEmpty() || !missingPredicatesWithDarkPreds.contains(error.getContradictedPredicate())) {
-						// this errors predicate was ensured with dark predicates
-						// hence the error is subsequent
-						Collection<DarkPredicate> darkPredsThatEnsureMissingPredicate = usedDarkPreds.parallelStream().filter(p -> p.getPredicate().equals(error.getContradictedPredicate())).collect(Collectors.toSet());
-						// connect parent errors with this error
-						Collection<AbstractError> parentErrors = darkPredsThatEnsureMissingPredicate.parallelStream().flatMap(pred -> pred.getRoot().getErrors().stream()).collect(Collectors.toSet());
-						error.addCausingError(parentErrors);
-						parentErrors.parallelStream().forEach(parentErr -> parentErr.addSubsequentError(error));
-					}
+					((RequiredPredicateError) e).mapPrecedingErrors();
 				}
-			}
-		}
-	}
-	
-	private Map<AbstractError, Set<AbstractError>> buildUpSubsequentErrorStack() {
-		Set<AbstractError> rootErrors = Sets.newHashSet();
-		Map<AbstractError, Set<AbstractError>> childErrorToParentErrors = Maps.newHashMap();
-		Map<Class, Integer> errorCount = new HashMap<Class, Integer>();
-		int subSequentErrorsCount = 0;
-		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
-			for (AbstractError e: seed.getErrors()) {
-				Integer count = errorCount.get(e.getClass());
-				if(count == null) {
-					errorCount.put(e.getClass(), 1);
-				} else {
-					count++;
-					errorCount.put(e.getClass(), count);
-				}
-				if(!(e instanceof RequiredPredicateError)) {
-					// error has to be a root error
-					rootErrors.add(e);
-					childErrorToParentErrors.put(e, null);
-				}
-				else {
-					Collection<ISLConstraint> missingPredicatesWithDarkPreds = seed.getMissingPredicatesWithDarkPreds();
-					RequiredPredicateError error = (RequiredPredicateError) e;
-					if(missingPredicatesWithDarkPreds.contains(error.getContradictedPredicate())) {
-						// error is root error, since the required predicate can also not be generated with dark preds
-						rootErrors.add(e);
-						childErrorToParentErrors.put(e, null);
-					}
-					else {
-						// now find previous errors
-						Set<IAnalysisSeed> seedsThatEnsureDarkPreds = seed.getNeededDarkPreds().parallelStream().map(darkPred -> darkPred.getRoot()).collect(Collectors.toSet());
-						if(seedsThatEnsureDarkPreds.isEmpty()) {
-							// no dark preds available that cause errors in the seed
-							// hence error is caused due to other errors in the seed
-							childErrorToParentErrors.put(e, null);
-						}
-						else {
-							// subsequent error
-							subSequentErrorsCount++;
-						
-							for(IAnalysisSeed parentSeedWithErrors: seedsThatEnsureDarkPreds) {
-								for(AbstractError parentError: parentSeedWithErrors.getErrors()) {
-									if(parentError == e) {
-										continue;
-									}
-									Set<AbstractError> parentErrors = childErrorToParentErrors.get(parentError);
-									if(parentErrors == null) {
-										parentErrors = Sets.newHashSet();
-									}
-									parentErrors.add(e);
-									childErrorToParentErrors.put(parentError, parentErrors);
-								}
-							}
-						}
-						
-						
-					}
-					 
-					
-				}
-			}
-		}
-		String result = printSubsequentErrors(0, rootErrors, childErrorToParentErrors);
-		result += getErrorStats(errorCount, subSequentErrorsCount);
-		System.out.print(result);
-		return childErrorToParentErrors;
-	}
-	
-	private String getErrorStats(Map<Class, Integer> errorCount, int subSequentErrorsCount) {
-		
-		String result = "================================ CryptoAnalysis Summary ===================================\n";
-		if(errorCount.isEmpty()) {
-			result +=   "\tNo violation of any of the rules found.\n";
-		}
-		else {
-			result +=   "\n\tCryptoAnalysis found the following violations. For details see description above.\n\n";
-			for(Entry<Class, Integer> e : errorCount.entrySet()){
-				result += String.format("\t%s: %s\n", e.getKey().getSimpleName(),e.getValue());
-			}
-			
-			result +=   "\n\t" + subSequentErrorsCount + " Required Predicate Errors are subsequent (caused by other errors)";
-		}
-		result +=       "\n\n===========================================================================================";
-		return result;
-	}
-	
-	private String printSubsequentErrors(int level, Collection<AbstractError> errors, Map<AbstractError, Set<AbstractError>> childErrorToParentErrors) {
-		if(level > 20 || errors == null) {
-			return "";
-		}
-		String report = "";
-		String tabs = "";
-		for(int i=0; i<level; i++) {
-			tabs += "\t";
-		}
-		if(level > 0) {
-			report += tabs + "This error causes the following other errors: \n\n";
-		}
-		for(AbstractError e: errors) {
-			report += getErrorString(e, tabs);
-			report += printSubsequentErrors(level+2, childErrorToParentErrors.get(e), childErrorToParentErrors);
-		}
-		return report;
-		
-	}
-	
-	private String getErrorString(AbstractError e, String tabs) {
-		String report = "";
-		String className = e.getErrorLocation().getMethod().getClass().getName();
-		String method = e.getErrorLocation().getMethod().getSubSignature();
-		String statement = e.getErrorLocation().getUnit().get().toString();
-		String errorString = e.toErrorMarkerString();
-		String errorClass = e.getClass().getSimpleName();
-		String errorViolatingRule = e.getRule().getClassName();
-		String object = "";
-		if(e instanceof ErrorWithObjectAllocation) {
-			object = tabs + String.format("(on Object #%s)\n", ((ErrorWithObjectAllocation) e).getObjectLocation().getObjectId());
-		}
-		report += tabs + "In Class " + className + " in Method: " + method + "\n";
-		report += tabs + "At statement: " + statement + "\n";
-		report += tabs + String.format("%s violating CrySL rule for %s \n", errorClass, errorViolatingRule);
-		report += object;
-		report += tabs + errorString + "\n";
-		report += "\n";
-		return report;
-	}
-
-	private void reportMissingPred(AnalysisSeedWithSpecification seed, RequiredCrySLPredicate missingPred) {
-		CrySLRule rule = seed.getSpec().getRule();
-		if (!rule.getPredicates().parallelStream().anyMatch(e -> missingPred.getPred().getPredName().equals(e.getPredName()) && missingPred.getPred().getParameters().get(0).equals(e.getParameters().get(0)))) {
-			for (CallSiteWithParamIndex v : seed.getParameterAnalysis().getAllQuerySites()) {
-				if (missingPred.getInvolvedVarNames().contains(v.getVarName()) && missingPred.getLocation().equals(v.stmt())) {
-					RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(v, null));
-					seed.addError(e);
-					cryptoScanner.getAnalysisListener().reportError(seed, e);
-				}
-			}
-			// TODO Refactor
-			if(missingPred.getPred().getParameters().stream().anyMatch(param -> param instanceof CrySLObject && ((CrySLObject) param).getName().equals("this"))) {
-				// edge cases that would produce new errors
-				RequiredPredicateError e = new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(new CallSiteWithParamIndex(missingPred.getLocation(), null, 0, "this"), null));
-				seed.addError(e);
-				if(rule.getClassName().equals("javax.crypto.SecretKey") && missingPred.getPred().getPredName().equals("generatedKey")) {
-					return;
-				}
-				if(rule.getClassName().equals("java.security.KeyPair") && missingPred.getPred().getPredName().equals("generatedKeypair")) {
-					return;
-				}	
-				cryptoScanner.getAnalysisListener().reportError(seed, e);
 			}
 		}
 	}

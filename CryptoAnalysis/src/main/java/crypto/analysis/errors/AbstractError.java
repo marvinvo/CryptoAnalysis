@@ -18,7 +18,7 @@ public abstract class AbstractError implements IError{
 	private final String invokeMethod;
 	private final String declaringClass;
 	
-	private Set<AbstractError> causedByErrors = Sets.newHashSet(); // root
+	private Set<AbstractError> causedByErrors = Sets.newHashSet(); // preceding
 	private Set<AbstractError> willCauseErrors = Sets.newHashSet(); // subsequent
 
 	public AbstractError(Statement errorLocation, CrySLRule rule) {

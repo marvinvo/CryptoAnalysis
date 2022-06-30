@@ -149,7 +149,7 @@ public class ConstraintSolver {
 		return alt;
 	}
 
-	private RequiredCrySLPredicate retrieveValuesForPred(ISLConstraint cons) {
+	public RequiredCrySLPredicate retrieveValuesForPred(ISLConstraint cons) {
 		CrySLPredicate pred = (CrySLPredicate) cons;
 		for (CallSiteWithParamIndex cwpi : this.parameterAnalysisQuerySites) {
 			for (ICrySLPredicateParameter p : pred.getParameters()) {
@@ -619,7 +619,7 @@ public class ConstraintSolver {
 			origin = con;
 		}
 
-		protected Collection<AbstractError> getErrors() {
+		public Collection<AbstractError> getErrors() {
 			return errors;
 		};
 

@@ -29,11 +29,19 @@ import javax.crypto.spec.IvParameterSpec;
 
 import org.junit.Test;
 
+import crypto.analysis.CryptoScannerSettings;
 import crypto.analysis.CrySLRulesetSelector.Ruleset;
 import test.UsagePatternTestingFramework;
 import test.assertions.Assertions;
 
 public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingFramework{
+	
+	@Override
+	protected CryptoScannerSettings getSettings() {
+		CryptoScannerSettings settings = new CryptoScannerSettings();
+		settings.setSubsequentErrorDetection(true);
+		return settings;
+	}
 
 	@Test
 	public void constraintErrorTest() throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, UnsupportedEncodingException, IllegalBlockSizeException, BadPaddingException{
@@ -42,6 +50,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 			Assertions.createsARootError();
 			
 			SecretKey key = keyGenerator.generateKey();
+			Assertions.createsASubsequentError();
 
 			Cipher cipher = Cipher.getInstance("DES");
 			Assertions.createsARootError();
@@ -55,7 +64,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 			
 			// double check if matches errors counts
 			Assertions.constraintErrors(2);
-			Assertions.predicateErrors(1);
+			Assertions.predicateErrors(2);
 	}
 	
 	/**

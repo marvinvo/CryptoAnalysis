@@ -29,6 +29,7 @@ import crypto.analysis.CrySLRulesetSelector;
 import crypto.analysis.CrySLRulesetSelector.RuleFormat;
 import crypto.analysis.CrySLRulesetSelector.Ruleset;
 import crypto.analysis.CryptoScanner;
+import crypto.analysis.CryptoScannerSettings;
 import crypto.analysis.EnsuredCrySLPredicate;
 import crypto.analysis.IAnalysisSeed;
 import crypto.analysis.errors.AbstractError;
@@ -85,6 +86,10 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 	private static final RuleFormat ruleFormat= RuleFormat.SOURCE;
 	List<CrySLRule> rules;
 	
+	protected CryptoScannerSettings getSettings() {
+		return new CryptoScannerSettings();
+	}
+	
 	@Override
 	protected SceneTransformer createAnalysisTransformer() throws ImprecisionException {
 		return new SceneTransformer() {
@@ -97,7 +102,7 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 				icfg = new ObservableDynamicICFG(true);
 				final Set<Assertion> expectedResults = extractBenchmarkMethods(sootTestMethod);
 				final TestingResultReporter resultReporter = new TestingResultReporter(expectedResults);
-				CryptoScanner scanner = new CryptoScanner() {
+				CryptoScanner scanner = new CryptoScanner(getSettings()) {
 					
 					@Override
 					public ObservableICFG<Unit, SootMethod> icfg() {
