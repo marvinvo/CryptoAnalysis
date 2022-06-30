@@ -15,12 +15,12 @@ import boomerang.callgraph.ObservableICFG;
 import boomerang.debugger.Debugger;
 import boomerang.debugger.IDEVizDebugger;
 import boomerang.preanalysis.BoomerangPretransformer;
+import crypto.HeadlessCryptoScannerSettings.ControlGraph;
+import crypto.HeadlessCryptoScannerSettings.ReportFormat;
 import crypto.analysis.CrySLAnalysisListener;
 import crypto.analysis.CrySLResultsReporter;
 import crypto.analysis.CryptoScanner;
 import crypto.analysis.CryptoScannerSettings;
-import crypto.analysis.CryptoScannerSettings.ControlGraph;
-import crypto.analysis.CryptoScannerSettings.ReportFormat;
 import crypto.analysis.IAnalysisSeed;
 import crypto.exceptions.CryptoAnalysisException;
 import crypto.exceptions.CryptoAnalysisParserException;
@@ -51,7 +51,7 @@ import typestate.TransitionFunction;
 
 public abstract class HeadlessCryptoScanner {
 	
-	private static CryptoScannerSettings settings = new CryptoScannerSettings();
+	private static HeadlessCryptoScannerSettings settings = new HeadlessCryptoScannerSettings();
 	private boolean hasSeeds;
 	private static Stopwatch callGraphWatch;
 	private static List<CrySLRule> rules = Lists.newArrayList();
@@ -197,7 +197,8 @@ public abstract class HeadlessCryptoScanner {
 				final CrySLResultsReporter reporter = new CrySLResultsReporter();
 				if(getAdditionalListener() != null)
 					reporter.addReportListener(getAdditionalListener());
-				CryptoScanner scanner = new CryptoScanner() {
+				
+				CryptoScanner scanner = new CryptoScanner(settings.getCryptoScannerSettings()) {
 
 					@Override
 					public ObservableICFG<Unit, SootMethod> icfg() {

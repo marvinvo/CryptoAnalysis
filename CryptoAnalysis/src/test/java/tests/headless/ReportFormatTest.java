@@ -8,7 +8,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
 import crypto.HeadlessCryptoScanner;
-import crypto.analysis.CryptoScannerSettings.ReportFormat;
+import crypto.HeadlessCryptoScannerSettings.ReportFormat;
 
 public class ReportFormatTest extends AbstractHeadlessTest{
 

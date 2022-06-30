@@ -1,8 +1,9 @@
-package crypto.analysis;
+package crypto;
 
+import crypto.analysis.CryptoScannerSettings;
 import crypto.exceptions.CryptoAnalysisParserException;
 
-public class CryptoScannerSettings {
+public class HeadlessCryptoScannerSettings {
 	
 	private ControlGraph controlGraph = null;
 	private RulesetPathType rulesetPathType = null;
@@ -16,15 +17,15 @@ public class CryptoScannerSettings {
 	private boolean preAnalysis;
 	private boolean visualization;
 	private boolean providerDetectionAnalysis;
-	private boolean subsequentErrorDetection;
+	private CryptoScannerSettings cryptoScannerSettings;
 	
-	public CryptoScannerSettings() {
+	public HeadlessCryptoScannerSettings() {
 		setControlGraph(ControlGraph.CHA);
 		setRulesetPathType(RulesetPathType.NONE);
 		setPreAnalysis(false);
 		setVisualization(false);
 		setProviderDetectionAnalysis(false);
-		setSubsequentErrorDetection(false);
+		cryptoScannerSettings = new CryptoScannerSettings();
 	}
 	
 	public ControlGraph getControlGraph() {
@@ -123,12 +124,8 @@ public class CryptoScannerSettings {
 		this.providerDetectionAnalysis = providerDetectionAnalysis;
 	}
 	
-	public boolean isSubsequentErrorDetection() {
-		return this.subsequentErrorDetection;
-	}
-	
-	public void setSubsequentErrorDetection(boolean subsequentErrorDetection) {
-		this.subsequentErrorDetection = subsequentErrorDetection;
+	public CryptoScannerSettings getCryptoScannerSettings() {
+		return this.cryptoScannerSettings;
 	}
 	
 	public void parseSettingsFromCLI(String[] settings) throws CryptoAnalysisParserException {
@@ -193,7 +190,7 @@ public class CryptoScannerSettings {
 					setProviderDetectionAnalysis(true);
 					break;
 				case "--subsuquenterrordetection":
-					setSubsequentErrorDetection(true);
+					cryptoScannerSettings.setSubsequentErrorDetection(true);
 					break;
 				default:
 					showErrorMessage(settings[i]);		

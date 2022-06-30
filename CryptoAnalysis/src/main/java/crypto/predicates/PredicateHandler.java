@@ -145,6 +145,10 @@ public class PredicateHandler {
 	}
 
 	public boolean addNewPred(IAnalysisSeed seedObj, Statement statement, Val variable, EnsuredCrySLPredicate ensPred) {
+		if(!cryptoScanner.getSettings().isSubsequentErrorDetection() && ensPred instanceof DarkPredicate) {
+			// subsequent error detection is disabled
+			return false;
+		}
 		Set<EnsuredCrySLPredicate> set = getExistingPredicates(statement, variable);
 		boolean added = set.add(ensPred);
 		assert existingPredicates.get(statement, variable).contains(ensPred);

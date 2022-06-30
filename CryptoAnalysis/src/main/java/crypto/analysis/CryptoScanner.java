@@ -32,6 +32,7 @@ import typestate.TransitionFunction;
 
 public abstract class CryptoScanner {
 
+	private final CryptoScannerSettings settings;
 	private final LinkedList<IAnalysisSeed> worklist = Lists.newLinkedList();
 	private final List<ClassSpecification> specifications = Lists.newLinkedList();
 	private final PredicateHandler predicateHandler = new PredicateHandler(this);
@@ -61,7 +62,13 @@ public abstract class CryptoScanner {
 		return resultsAggregator;
 	};
 
+	public CryptoScanner(CryptoScannerSettings settings) {
+		this.settings = settings;
+		CrySLMethodToSootMethod.reset();
+	}
+	
 	public CryptoScanner() {
+		this.settings = new CryptoScannerSettings(); // this sets up default settings
 		CrySLMethodToSootMethod.reset();
 	}
 
@@ -184,5 +191,9 @@ public abstract class CryptoScanner {
 
 	public Collection<AnalysisSeedWithSpecification> getAnalysisSeeds() {
 		return this.seedsWithSpec.values();
+	}
+	
+	public CryptoScannerSettings getSettings() {
+		return this.settings;
 	}
 }
