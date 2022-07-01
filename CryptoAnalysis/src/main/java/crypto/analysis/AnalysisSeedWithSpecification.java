@@ -656,8 +656,8 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	 * @param existingEnsuredPredicates
 	 * @param existingDarkPredicates
 	 */
-	public void computeAndReportMissingRequiredPredicates(Collection<EnsuredCrySLPredicate> existingEnsuredPredicates, Collection<DarkPredicate> existingDarkPredicates) {
-		Set<ISLConstraint> requiredPredicates = getRequiredPredicates();
+	public List<AbstractError> computeAndReturnErrorsForNotEnsuredPredicates(Set<ISLConstraint> requiredPredicates, Collection<EnsuredCrySLPredicate> existingEnsuredPredicates, Collection<DarkPredicate> existingDarkPredicates) {
+		List<AbstractError> result = Lists.newArrayList();
 		
 		for(ISLConstraint pred: requiredPredicates) {
 			if (pred instanceof RequiredCrySLPredicate) {
@@ -667,15 +667,15 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 					if(reqPred.getPred().isNegated()){
 						if(existingEnsuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), ensPred))) {
 							// predicate is ensured, but is required to be not ensured
-							this.reportMissingPred(reqPred);
+							result.addAll(this.getErrorForMissingPred(reqPred));
 							continue;
 						}
 					}
 					else {
 						if(!existingEnsuredPredicates.parallelStream().anyMatch(ensPred -> ensPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), ensPred))) {
 							// predicate is not ensured, but is required to be ensured
-							Collection<RequiredPredicateError> errors = this.reportMissingPred(reqPred);
-							
+							Collection<RequiredPredicateError> errors = this.getErrorForMissingPred(reqPred);
+							result.addAll(errors);
 							// now check, if a dark predicate is ensuring the pred
 							Collection<DarkPredicate> darkPredsThatEnsureRequiredPred = existingDarkPredicates.parallelStream().filter(darkPred -> darkPred.getPredicate().equals(reqPred.getPred()) && doPredsParametersMatch(reqPred.getPred(), darkPred)).collect(Collectors.toList());
 							if(!darkPredsThatEnsureRequiredPred.isEmpty()) {
@@ -706,8 +706,8 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 								// TODO: create error type for alternatives. Would be also applicable for "or"ed constraint errors
 								RequiredCrySLPredicate reqpred = constraintSolver.retrieveValuesForPred(altPred);
 								if(pred != null) {
-									Collection<RequiredPredicateError> errors = this.reportMissingPred(reqpred);
-									
+									Collection<RequiredPredicateError> errors = this.getErrorForMissingPred(reqpred);
+									result.addAll(errors);
 									// now check, if a dark predicate is ensuring the pred
 									Collection<DarkPredicate> darkPredsThatEnsureRequiredPred = existingDarkPredicates.parallelStream().filter(darkPred -> darkPred.getPredicate().equals(altPred) && doPredsParametersMatch(altPred, darkPred)).collect(Collectors.toList());
 									if(!darkPredsThatEnsureRequiredPred.isEmpty()) {
@@ -722,6 +722,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				}
 			}
 		}
+		return result;
 	}
 	
 	
@@ -744,10 +745,12 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		if(conditional instanceof CrySLPredicate && !ConstraintSolver.predefinedPreds.contains(((CrySLPredicate) conditional).getPredName())) {
 			RequiredCrySLPredicate reqPred = constraintSolver.retrieveValuesForPred((CrySLPredicate)conditional);
 			if(reqPred == null) {
-				return null;
+				// could not extract predicate and thus, the condition is not satisfied.
+				return Lists.newArrayList();
 			}
-			if(!fastCheckRequiredPredicate(reqPred, this.ensuredPredicates)) {
-				return Lists.newArrayList(getErrorForMissingPred(reqPred));
+			Collection<AbstractError> errors = computeAndReturnErrorsForNotEnsuredPredicates(Sets.newHashSet(reqPred), this.ensuredPredicates, this.darkPredicates);
+			if(!errors.isEmpty()) {
+				return errors;
 			}
 			return null;
 		}
@@ -761,13 +764,12 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 		}
 	}
 		
-	private Collection<RequiredPredicateError> reportMissingPred(RequiredCrySLPredicate missingPred) {
-		Collection<RequiredPredicateError> errors = this.getErrorForMissingPred(missingPred);
-		errors.forEach(error -> {
-			this.cryptoScanner.getAnalysisListener().reportError(this, error);
-			this.addError(error);
-		});
-		return errors;
+	public void checkAndReportMissingRequiredPredicates() {
+		List<AbstractError> errors = computeAndReturnErrorsForNotEnsuredPredicates(getRequiredPredicates(), this.ensuredPredicates, this.darkPredicates);
+		for(AbstractError e: errors) {
+			this.addError(e);
+			this.cryptoScanner.getAnalysisListener().reportError(this, e);
+		}
 	}
 	
 	private Collection<RequiredPredicateError> getErrorForMissingPred(RequiredCrySLPredicate missingPred) {
@@ -886,7 +888,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	
 
 	/**
-	 * Returns true, if the predicate is ensured after the state {@param stateNode}.
+	 * Returns true, if the predicate is ensured when transition to state {@param stateNode}.
 	 * @param ensPred
 	 * @param stateNode 
 	 * @return
@@ -971,10 +973,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 	public Map<Statement, SootMethod> getAllCallsOnObject() {
 		return allCallsOnObject;
-	}
-
-	public void checkAndReportMissingRequiredPredicates() {
-		this.computeAndReportMissingRequiredPredicates(ensuredPredicates, darkPredicates);
 	}
 	
 }
