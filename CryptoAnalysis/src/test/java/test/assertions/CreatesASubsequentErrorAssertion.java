@@ -1,7 +1,9 @@
 package test.assertions;
 
+import java.util.List;
 import java.util.Set;
 
+import com.google.inject.internal.util.Lists;
 import com.google.inject.internal.util.Sets;
 
 import boomerang.jimple.Statement;
@@ -13,7 +15,7 @@ import test.Assertion;
 public class CreatesASubsequentErrorAssertion implements Assertion{
 	
 	private Stmt errorLocation;
-	private AbstractError extractedError;
+	private List<AbstractError> extractedErrors = Lists.newArrayList();
 	
 	public CreatesASubsequentErrorAssertion(Stmt pred) {
 		errorLocation = pred;
@@ -21,7 +23,7 @@ public class CreatesASubsequentErrorAssertion implements Assertion{
 
 	@Override
 	public boolean isSatisfied() {
-		return extractedError != null && !extractedError.getRootErrors().isEmpty();
+		return !extractedErrors.isEmpty() && extractedErrors.stream().anyMatch(e -> !e.getRootErrors().isEmpty());
 	}
 
 	@Override
@@ -32,15 +34,15 @@ public class CreatesASubsequentErrorAssertion implements Assertion{
 
 	public void addError(AbstractError error) {
 		if(error.getErrorLocation().getUnit().get() == errorLocation) {
-			extractedError = error;
+			extractedErrors.add(error);
 		}
 	}
 	
 	@Override
 	public String toString() {
-		return extractedError == null 
+		return extractedErrors.isEmpty()
 				? "Expected an error @ " + errorLocation + " but found none." 
-				: extractedError + " @ " + errorLocation + " is not a subsequent error.";
+				: extractedErrors.toString() + " @ " + errorLocation + " is not a subsequent error.";
 	}
 
 }
