@@ -375,7 +375,7 @@ public class ConstraintSolver {
 					for (CallSiteWithParamIndex cs : parameterAnalysisQuerySites) {
 						if (cs.getVarName().equals(varName)) {
 							Collection<Type> vals = propagatedTypes.get(cs);
-							if (!vals.parallelStream().anyMatch(e -> isSubType(e.toQuotedString(), parameters.get(1).getName()) || isSubType(parameters.get(1).getName(), e.toQuotedString()))) {
+							if (!vals.parallelStream().anyMatch(e -> isSubType(parameters.get(1).getName(), e.toQuotedString()))) {
 								for (ExtractedValue v : parsAndVals.get(cs)) {
 									errors.add(new InstanceOfError(new CallSiteWithExtractedValue(cs, v), classSpec.getRule(), object, pred));
 								}
