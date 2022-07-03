@@ -24,4 +24,6 @@ ENSURES
 	generatedKeypair[this, _] after Con;
 	generatedPubkey[retPub] after GetPubl;
 	generatedPrivkey[retPriv] after GetPriv;
+	generatedKey[retPub,_] after GetPubl;
+	generatedKey[retPriv,_] after GetPriv;
 	

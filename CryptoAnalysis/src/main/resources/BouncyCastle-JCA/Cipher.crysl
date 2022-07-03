@@ -119,9 +119,9 @@ CONSTRAINTS
 	length[cipherText] <= ciphertext_off;
 
 REQUIRES
-	instanceOf[key, java.security.PrivateKey] => generatedPrivkey[key];
-	instanceOf[key, java.security.PublicKey] => generatedPubkey[key];
-	instanceOf[key, javax.crypto.SecretKey] => generatedKey[key, alg(transformation)];
+	alg(transformation) in {"RSA"} && encmode == 1 => generatedPrivkey[key];
+	alg(transformation) in {"RSA"} && encmode == 2 => generatedPubkey[key];
+	generatedKey[key, alg(transformation)];
 	randomized[ranGen];
 	preparedAlg[param, alg(transformation)];
 	!macced[_, plainText];

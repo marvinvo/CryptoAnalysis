@@ -2,7 +2,8 @@ SPEC java.security.KeyFactory
 
 OBJECTS
 	java.lang.String keyFactoryAlgorithm;
-	java.security.spec.KeySpec keySpec;
+	java.security.spec.KeySpec privKeySpec;
+	java.security.spec.KeySpec pubKeySpec;
 	java.security.PrivateKey privKey;
 	java.security.PublicKey pubKey;
    
@@ -11,8 +12,8 @@ EVENTS
 	g2: getInstance(keyFactoryAlgorithm, _);
 	Gets := g1 | g2;
 
-	GenPriv: privKey = generatePrivate(keySpec);
-	GenPubl: pubKey = generatePublic(keySpec);
+	GenPriv: privKey = generatePrivate(privKeySpec);
+	GenPubl: pubKey = generatePublic(pubKeySpec);
     
 ORDER
 	Gets, (GenPriv* | GenPubl*)*
@@ -21,7 +22,8 @@ CONSTRAINTS
 	keyFactoryAlgorithm in {"RSA", "DiffieHellman", "DH", "DSA", "EC"};
 
 REQUIRES
-	speccedKey[keySpec, _];	
+	speccedKey[privKeySpec, _];	
+	speccedKey[pubKeySpec, _];	
 	
 ENSURES
 	generatedKeyFactory[this, keyFactoryAlgorithm] after Gets;
