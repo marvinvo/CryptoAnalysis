@@ -217,7 +217,9 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		//java.security.KeyFactory
 		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
 		PrivateKey privateKey = keyFactory.generatePrivate(privateSpec);
+		Assertions.createsARootError();
 		PublicKey publicKey = keyFactory.generatePublic(publicSpec);
+		Assertions.createsARootError();
 		
 		//java.security.KeyPair
 		KeyPair keyPair = new KeyPair(publicKey, privateKey);
@@ -225,7 +227,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		//javax.crypto.Cipher
 		Cipher cipher = Cipher.getInstance("RSA");
 		cipher.init(Cipher.ENCRYPT_MODE, keyPair.getPrivate());
-		Assertions.createsARootError();
+		Assertions.createsASubsequentError();
 		
 
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
