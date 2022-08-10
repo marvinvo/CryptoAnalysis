@@ -37,17 +37,12 @@ public class Assertions {
 		
 	}
 	
-	public static void createsASubsequentError() {
-		
-	}
-	
-	public static void willLeadToSubsequentErrors() {
-		
-	}
-	
-	public static void createsARootError() {
-		
-	}
+	public static void dependentError(int thisErrorNr) {}
+	public static void dependentError(int thisErrorNr, int precedingError1) {}
+	public static void dependentError(int thisErrorNr, int precedingError1, int precedingError2) {}
+	public static void dependentError(int thisErrorNr, int precedingError1, int precedingError2, int precedingError3) {}
+	public static void dependentError(int thisErrorNr, int precedingError1, int precedingError2, int precedingError3, int precedingError4) {}
+	public static void dependentError(int thisErrorNr, int precedingError1, int precedingError2, int precedingError3, int precedingError4, int precedingError5) {}
 
     public static void missingTypestateChange() {
     }
@@ -70,4 +65,5 @@ public class Assertions {
 	public static void typestateErrors(int i) {
 		
 	}
+	
 }

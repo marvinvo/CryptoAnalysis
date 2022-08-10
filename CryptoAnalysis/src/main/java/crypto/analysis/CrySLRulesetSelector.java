@@ -34,7 +34,7 @@ public class CrySLRulesetSelector {
 	 * current RuleSets
 	 */
 	public static enum Ruleset {
-		JavaCryptographicArchitecture, BouncyCastle, Tink, CostumClasses
+		JavaCryptographicArchitecture, BouncyCastle, Tink, CostumClasses, JavaCryptographicArchitecture_BET
 	}
 
 	/**
@@ -72,6 +72,9 @@ public class CrySLRulesetSelector {
 		for (String s : set) {
 			if (s.equalsIgnoreCase(Ruleset.JavaCryptographicArchitecture.name())) {
 				ruleset.add(Ruleset.JavaCryptographicArchitecture);
+			}
+			if (s.equalsIgnoreCase(Ruleset.JavaCryptographicArchitecture_BET.name())) {
+				ruleset.add(Ruleset.JavaCryptographicArchitecture_BET);
 			}
 			if (s.equalsIgnoreCase(Ruleset.BouncyCastle.name())) {
 				ruleset.add(Ruleset.BouncyCastle);

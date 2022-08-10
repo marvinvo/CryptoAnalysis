@@ -13,9 +13,7 @@ EVENTS
 ORDER
 	Cons
 	
-REQUIRES
-	randomized[iv];
-	
 ENSURES
 	preparedIV[this];
+	randomized[iv] => randomizedPreparedIV[this];
 	

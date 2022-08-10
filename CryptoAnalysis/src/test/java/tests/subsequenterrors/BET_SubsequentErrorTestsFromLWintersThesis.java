@@ -34,7 +34,7 @@ import crypto.analysis.CrySLRulesetSelector.Ruleset;
 import test.UsagePatternTestingFramework;
 import test.assertions.Assertions;
 
-public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingFramework{
+public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingFramework{
 	
 	@Override
 	protected CryptoScannerSettings getSettings() {
@@ -48,15 +48,14 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 			// Check for subsequent and root errors
 			KeyGenerator keyGenerator = KeyGenerator.getInstance("DES");
 			Assertions.dependentError(0); // root error
-			
-			SecretKey key = keyGenerator.generateKey();
-			Assertions.dependentError(1, 0);
+// CHANGE			
+			SecretKey key = keyGenerator.generateKey(); // this throws no errors in new rule set
 
 			Cipher cipher = Cipher.getInstance("DES");
-			Assertions.dependentError(2);
+			Assertions.dependentError(1);
 			
 			cipher.init(Cipher.ENCRYPT_MODE, key);
-			Assertions.dependentError(3, 0);
+			Assertions.dependentError(2, 0);
 
 			byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
 			byte[] cipherText = cipher.doFinal(plainText);
@@ -64,7 +63,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 			
 			// double check if matches errors counts
 			Assertions.constraintErrors(2);
-			Assertions.predicateErrors(2);
+			Assertions.predicateErrors(1);
 	}
 	
 	/**
@@ -259,9 +258,9 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		//CogniCryt_SAST reports an error in the next line saying that the key size is chosen inappropriately. 
 		keygen.init(46);
 		Assertions.dependentError(0); // root error
-		SecretKey key = keygen.generateKey();
-		Assertions.dependentError(1, 0); // subsequent error
-		// TODO
+// CHANGE
+		SecretKey key = keygen.generateKey(); // no subsequent error anymore
+		
 		Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
 		
 		//CogniCryt_SAST reports an error in the next line as the key flowing to this Cipher usage was not generated securely. 
@@ -282,9 +281,9 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		keyGen.init(secureRandom);
 		Assertions.dependentError(1, 0); // subsequent error
 		
-		
-		SecretKey key = keyGen.generateKey();
-		Assertions.dependentError(2, 1); // subsequent error
+// CHANGE	
+		SecretKey key = keyGen.generateKey(); // this reports no error anymore
+
 	}
 	
 	@Test
@@ -347,13 +346,76 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		}
 	}
 	
-	// LIMITATIONS OF POC
+	//
+	// NEW TESTS
+	//
 	
 	@Test
-	public void minimalTest() throws NoSuchAlgorithmException {
+	public void usingNotRandomizedIVForDecryption() throws Exception{
+		//Generate Key
+			KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+			SecureRandom secureRandom = new SecureRandom();
+			int keyBitSize = 128;
+			keyGenerator.init(keyBitSize, secureRandom);
+			SecretKey secretKey = keyGenerator.generateKey();
+
+			byte[] ivBytes = "notRandomizedIV".getBytes();
+
+			IvParameterSpec iv = new IvParameterSpec(ivBytes); // this does not report an error
+
+			//Create and initialize cipher object
+			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+			cipher.init(Cipher.DECRYPT_MODE, secretKey, iv);
+
+			// encrypt
+			byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
+			byte[] cipherText = cipher.doFinal(plainText);
+			
+			Assertions.predicateErrors(0);
+			Assertions.constraintErrors(0);
+			Assertions.typestateErrors(0);
+	}
+	
+	@Test
+	public void usingNotRandomizedIVForEncryption() throws Exception{
+		//Generate Key
+			KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+			SecureRandom secureRandom = new SecureRandom();
+			int keyBitSize = 128;
+			keyGenerator.init(keyBitSize, secureRandom);
+			SecretKey secretKey = keyGenerator.generateKey();
+
+			byte[] ivBytes = "notRandomizedIV".getBytes();
+
+			IvParameterSpec iv = new IvParameterSpec(ivBytes); // this reports a root error
+			Assertions.dependentError(0);
+
+			//Create and initialize cipher object
+			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+			cipher.init(Cipher.ENCRYPT_MODE, secretKey, iv);
+			Assertions.dependentError(1, 0); // subsequent error
+
+			// encrypt
+			byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
+			byte[] cipherText = cipher.doFinal(plainText);
+			
+			Assertions.predicateErrors(2);
+			Assertions.constraintErrors(0);
+			Assertions.typestateErrors(0);
+	}
+	
+	@Test
+	public void minimalTest() throws Exception {
 		// Generate Initialization Vectors
 		IvParameterSpec ivA = getIvSpecA();
+		Assertions.hasEnsuredPredicate(ivA);
 		IvParameterSpec ivB = getIvSpecB();
+		Assertions.notHasEnsuredPredicate(ivB);
+		Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		SecretKey key = KeyGenerator.getInstance("AES").generateKey();
+		c.init(Cipher.ENCRYPT_MODE, key, ivA);
+		Assertions.dependentError(2,1);
+		
 	}
 	
 	public static IvParameterSpec getIvSpecA() throws NoSuchAlgorithmException {
@@ -369,12 +431,11 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 	public static IvParameterSpec getIvSpecB() { 
 		byte[] ivBytesB = new byte[]{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
 		IvParameterSpec ivSpec = new IvParameterSpec(ivBytesB);
-		Assertions.dependentError(2);
 		return ivSpec;
 	}
 	
 	@Override
 	protected Ruleset getRuleSet() {
-		return Ruleset.JavaCryptographicArchitecture;
+		return Ruleset.JavaCryptographicArchitecture_BET;
 	}
 }

@@ -6,6 +6,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
@@ -63,11 +64,10 @@ import sync.pds.solver.nodes.Node;
 import test.assertions.Assertions;
 import test.assertions.CallToForbiddenMethodAssertion;
 import test.assertions.ConstraintErrorCountAssertion;
-import test.assertions.CreatesARootErrorAssertion;
 import test.assertions.ExtractedValueAssertion;
 import test.assertions.HasEnsuredPredicateAssertion;
 import test.assertions.InAcceptingStateAssertion;
-import test.assertions.CreatesASubsequentErrorAssertion;
+import test.assertions.DependentErrorAssertion;
 import test.assertions.MissingTypestateChange;
 import test.assertions.NoMissingTypestateChange;
 import test.assertions.NotHasEnsuredPredicateAssertion;
@@ -131,13 +131,9 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 							@Override
 							public void reportError(AbstractError error) {
 								for(Assertion a: expectedResults) {
-									if(a instanceof CreatesASubsequentErrorAssertion){
-										CreatesASubsequentErrorAssertion errorCountAssertion = (CreatesASubsequentErrorAssertion) a;
-										errorCountAssertion.addError(error);
-									}
-									if(a instanceof CreatesARootErrorAssertion){
-										CreatesARootErrorAssertion errorCountAssertion = (CreatesARootErrorAssertion) a;
-										errorCountAssertion.addError(error);
+									if(a instanceof DependentErrorAssertion){
+										DependentErrorAssertion ass = (DependentErrorAssertion) a;
+										ass.addError(error);
 									}
 								}
 								error.accept(new ErrorVisitor() {
@@ -401,6 +397,7 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 	}
 
 	private void extractBenchmarkMethods(SootMethod m, Set<Assertion> queries, Set<SootMethod> visited) {
+		
 		if (!m.hasActiveBody() || visited.contains(m))
 			return;
 		visited.add(m);
@@ -486,15 +483,19 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 					queries.add(new NoMissingTypestateChange((Stmt) pred));
 			}
 			
-			if(invocationName.startsWith("createsASubsequentError")){
-				for(Unit pred : getPredecessorsNotBenchmark(stmt))
-					queries.add(new CreatesASubsequentErrorAssertion((Stmt) pred));
+			if(invocationName.startsWith("dependentError")){
+				// extract parameters
+				List<Value> params = invokeExpr.getArgs();
+				if(!params.stream().allMatch(param -> param instanceof IntConstant)) {
+					continue;
+				}
+				int thisErrorID = ((IntConstant) params.remove(0)).value;
+				int[] precedingErrorIDs = params.stream().mapToInt(param -> ((IntConstant) param).value).toArray();
+				for(Unit pred : getPredecessorsNotBenchmark(stmt)) {
+					queries.add(new DependentErrorAssertion((Stmt) pred, thisErrorID, precedingErrorIDs));
+				}
 			}
 			
-			if(invocationName.startsWith("createsARootError")){
-				for(Unit pred : getPredecessorsNotBenchmark(stmt))
-					queries.add(new CreatesARootErrorAssertion((Stmt) pred));
-			}
 			
 			if(invocationName.startsWith("predicateErrors")){	
 				Value param = invokeExpr.getArg(0);
@@ -518,6 +519,11 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 				queries.add(new TypestateErrorCountAssertion(queryVar.value));
 			}
 		}
+		
+		// connect DependentErrorAssertions
+		Set<Assertion> deas = queries.stream().filter(q -> q instanceof DependentErrorAssertion).collect(Collectors.toSet());
+		deas.forEach(ass -> ((DependentErrorAssertion)ass).registerListeners(deas));
+		
 	}
 	private Set<Unit> getPredecessorsNotBenchmark(Stmt stmt) {
 		Set<Unit> res = Sets.newHashSet();

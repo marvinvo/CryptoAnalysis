@@ -81,7 +81,7 @@ public class DarkPredicate extends EnsuredCrySLPredicate {
 				// in this case, preceding errors are not reported yet because the predicate condition wasn't required to be satisfied
 				// because the dark predicate is required to be an ensured predicate, we can assume the condition is required to be satisfied.
 				// thus, we report errors all errors that causes the condition to be not satisfied
-				precedingErrors.stream().forEach(e -> this.generatingSeed.cryptoScanner.getAnalysisListener().reportError(generatingSeed, null));
+				precedingErrors.stream().forEach(e -> this.generatingSeed.cryptoScanner.getAnalysisListener().reportError(generatingSeed, e));
 				// further, preceding errors can be of type RequiredPredicateError.
 				// thus, we have to recursively map preceding errors for the newly reported errors.
 				for(AbstractError e: precedingErrors) {
