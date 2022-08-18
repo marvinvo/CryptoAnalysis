@@ -45,6 +45,7 @@ import test.assertions.Assertions;
 
 public class BCSubsequentErrorTests extends UsagePatternTestingFramework{
 	
+	
 	@Override
 	protected CryptoScannerSettings getSettings() {
 		CryptoScannerSettings settings = new CryptoScannerSettings();
@@ -57,6 +58,7 @@ public class BCSubsequentErrorTests extends UsagePatternTestingFramework{
 		return Ruleset.BouncyCastle;
 	}
 	
+	/*
 	public static class Constants {
 		
 		public static BigInteger n = new BigInteger("62771017353866");
@@ -93,6 +95,6 @@ public class BCSubsequentErrorTests extends UsagePatternTestingFramework{
 			Assertions.createsASubsequentError();
 			Assertions.createsARootError();
 		
-	}
+	}*/
 	
 }

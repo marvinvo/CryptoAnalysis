@@ -59,6 +59,7 @@ import soot.Value;
 import soot.jimple.IntConstant;
 import soot.jimple.InvokeExpr;
 import soot.jimple.Stmt;
+import soot.jimple.StringConstant;
 import soot.jimple.toolkits.ide.icfg.JimpleBasedInterproceduralCFG;
 import sync.pds.solver.nodes.Node;
 import test.assertions.Assertions;
@@ -448,7 +449,20 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 					continue;
 				Local queryVar = (Local) param;
 				Val val = new Val(queryVar, m);
-				queries.add(new HasEnsuredPredicateAssertion(stmt, val));
+				
+				if(invokeExpr.getArgCount() == 2) {
+					// predicate name is passed as parameter
+					Value predNameParam = invokeExpr.getArg(1);
+					if(!(predNameParam instanceof StringConstant)) {
+						continue;
+					}
+					String predName = ((StringConstant) predNameParam).value;
+					queries.add(new HasEnsuredPredicateAssertion(stmt, val, predName));
+				}
+				else {
+					queries.add(new HasEnsuredPredicateAssertion(stmt, val));
+				}
+				
 			}
 			
 			if(invocationName.startsWith("notHasEnsuredPredicate")){
@@ -457,7 +471,19 @@ public abstract class UsagePatternTestingFramework extends AbstractTestingFramew
 					continue;
 				Local queryVar = (Local) param;
 				Val val = new Val(queryVar, m);
-				queries.add(new NotHasEnsuredPredicateAssertion(stmt, val));
+
+				if(invokeExpr.getArgCount() == 2) {
+					// predicate name is passed as parameter
+					Value predNameParam = invokeExpr.getArg(1);
+					if(!(predNameParam instanceof StringConstant)) {
+						continue;
+					}
+					String predName = ((StringConstant) predNameParam).value;
+					queries.add(new NotHasEnsuredPredicateAssertion(stmt, val, predName));
+				}
+				else {
+					queries.add(new NotHasEnsuredPredicateAssertion(stmt, val));
+				}
 			}
 			
 			if(invocationName.startsWith("mustNotBeInAcceptingState")){

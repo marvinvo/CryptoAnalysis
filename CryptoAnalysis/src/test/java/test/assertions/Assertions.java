@@ -29,13 +29,11 @@ public class Assertions {
 		
 	}
 
-	public static void hasEnsuredPredicate(Object o) {
-		
-	}
+	public static void hasEnsuredPredicate(Object o) {}
+	public static void hasEnsuredPredicate(Object o, String predName) {}
 
-	public static void notHasEnsuredPredicate(Object o){
-		
-	}
+	public static void notHasEnsuredPredicate(Object o){}
+	public static void notHasEnsuredPredicate(Object o, String predName){}
 	
 	public static void dependentError(int thisErrorNr) {}
 	public static void dependentError(int thisErrorNr, int precedingError1) {}

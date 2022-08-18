@@ -350,7 +350,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 	// LIMITATIONS OF POC
 	
 	@Test
-	public void minimalTest() throws NoSuchAlgorithmException {
+	public void darkpredicatesAreBoundToGeneratingObject() throws NoSuchAlgorithmException {
 		// Generate Initialization Vectors
 		IvParameterSpec ivA = getIvSpecA();
 		IvParameterSpec ivB = getIvSpecB();

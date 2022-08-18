@@ -1,51 +1,8 @@
 package tests.subsequenterrors;
 
-import javax.crypto.KeyGenerator;
-import javax.crypto.NoSuchPaddingException;
-
-import java.io.UnsupportedEncodingException;
-import java.math.BigInteger;
-import java.security.GeneralSecurityException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.SecureRandom;
-import java.security.Signature;
-import java.security.SignatureException;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.RSAKeyGenParameterSpec;
-import java.security.spec.RSAPrivateKeySpec;
-import java.security.spec.RSAPublicKeySpec;
-
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
-import javax.crypto.spec.SecretKeySpec;
-
-import org.bouncycastle.crypto.KeyGenerationParameters;
-import org.bouncycastle.crypto.generators.RSAKeyPairGenerator;
-import org.bouncycastle.crypto.params.ECDomainParameters;
-import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
-import org.bouncycastle.crypto.params.ECPublicKeyParameters;
-import org.bouncycastle.crypto.params.ParametersWithRandom;
-import org.bouncycastle.math.ec.ECConstants;
-import org.bouncycastle.math.ec.ECCurve;
-import org.bouncycastle.util.encoders.Hex;
-import org.junit.Test;
-
-import crypto.analysis.CryptoScannerSettings;
 import crypto.analysis.CrySLRulesetSelector.Ruleset;
+import crypto.analysis.CryptoScannerSettings;
 import test.UsagePatternTestingFramework;
-import test.assertions.Assertions;
 
 public class JCASubsequentErrorTests extends UsagePatternTestingFramework{
 	
@@ -61,6 +18,7 @@ public class JCASubsequentErrorTests extends UsagePatternTestingFramework{
 		return Ruleset.JavaCryptographicArchitecture;
 	}
 	
+	/*
 	@Test
 	public void test1() throws GeneralSecurityException {
 		Integer keySize = new Integer(208);
@@ -101,6 +59,7 @@ public class JCASubsequentErrorTests extends UsagePatternTestingFramework{
 		byte[] keyMaterial = tmpKey.getEncoded();
 		final SecretKeySpec actKey = new SecretKeySpec(keyMaterial, "AES");
 	}
+	*/
 	
 	
 }

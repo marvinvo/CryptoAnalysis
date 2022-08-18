@@ -405,12 +405,10 @@ public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTest
 	}
 	
 	@Test
-	public void minimalTest() throws Exception {
+	public void darkpredicatesAreBoundToGeneratingObject() throws Exception {
 		// Generate Initialization Vectors
 		IvParameterSpec ivA = getIvSpecA();
-		Assertions.hasEnsuredPredicate(ivA);
 		IvParameterSpec ivB = getIvSpecB();
-		Assertions.notHasEnsuredPredicate(ivB);
 		Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
 		SecretKey key = KeyGenerator.getInstance("AES").generateKey();
 		c.init(Cipher.ENCRYPT_MODE, key, ivA);
