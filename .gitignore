@@ -11,3 +11,9 @@ shippable/
 *.class
 *.temp
 *.json
+CryptoAnalysis/src/main/java/crypto/.DS_Store
+CryptoAnalysis/src/main/java/.DS_Store
+CryptoAnalysis/src/main/.DS_Store
+CryptoAnalysis/src/.DS_Store
+CryptoAnalysis/.DS_Store
+.DS_Store
