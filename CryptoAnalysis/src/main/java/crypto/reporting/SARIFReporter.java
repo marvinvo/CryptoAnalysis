@@ -110,7 +110,7 @@ public class SARIFReporter extends ErrorMarkerListener {
 		JSONArray preceding = new JSONArray();
 		preceding.addAll(preceding_error_ids);
 		JSONArray subsequent = new JSONArray();
-		preceding.addAll(subsequent_error_ids);
+		subsequent.addAll(subsequent_error_ids);
 		result.put(SARIFConfig.Preceding_Errors_KEY, preceding);
 		result.put(SARIFConfig.Subsequent_Errors_KEY, subsequent);
 		this.results.add(result);

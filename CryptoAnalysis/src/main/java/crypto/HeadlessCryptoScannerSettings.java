@@ -189,7 +189,7 @@ public class HeadlessCryptoScannerSettings {
 				case "--providerdetection":
 					setProviderDetectionAnalysis(true);
 					break;
-				case "--subsuquenterrordetection":
+				case "--subsequenterrordetection":
 					cryptoScannerSettings.setSubsequentErrorDetection(true);
 					break;
 				default:
