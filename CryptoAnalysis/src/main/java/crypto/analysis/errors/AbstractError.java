@@ -81,6 +81,7 @@ public abstract class AbstractError implements IError{
 		result = prime * result + ((invokeMethod == null) ? 0 : invokeMethod.hashCode());
 		result = prime * result + ((outerMethod == null) ? 0 : outerMethod.hashCode());
 		result = prime * result + ((rule == null) ? 0 : rule.hashCode());
+		//result = prime * result + ((this.toString() == null) ? 0 : this.toString().hashCode());
 		return result;
 	}
 
