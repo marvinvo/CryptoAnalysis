@@ -73,6 +73,7 @@ public abstract class CryptoScanner {
 	}
 
 	public void scan(List<CrySLRule> specs) {
+		Stopwatch scanWatch = Stopwatch.createStarted();
 		int processedSeeds = 0;
 		for (CrySLRule rule : specs) {
 			specifications.add(new ClassSpecification(rule, this));
@@ -83,7 +84,9 @@ public abstract class CryptoScanner {
 		logger.info("Searching for seeds for the analysis!");
 		initialize();
 		long elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
-		logger.info("Discovered " + worklist.size() + " analysis seeds within " + elapsed + " milliseconds!");
+		logger.info("Discovered " + worklist.size() + " analysis seeds within " + elapsed + " ms!");
+		analysisWatch.reset();
+		analysisWatch.start();
 		while (!worklist.isEmpty()) {
 			IAnalysisSeed curr = worklist.poll();
 			listener.discoveredSeed(curr);
@@ -93,8 +96,11 @@ public abstract class CryptoScanner {
 			estimateAnalysisTime();
 		}
 		
+		
 		elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
-		logger.info("Analysis without predicate checks took " + elapsed + " milliseconds!");
+		logger.info("Analysis without predicate checks took " + elapsed + " ms!");
+		analysisWatch.reset();
+		analysisWatch.start();
 
 //		IDebugger<TypestateDomainValue<StateNode>> debugger = debugger();
 //		if (debugger instanceof CryptoVizDebugger) {
@@ -104,7 +110,8 @@ public abstract class CryptoScanner {
 		predicateHandler.checkPredicates();
 		
 		elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
-		logger.info("Analysis with predicate checks took " + elapsed + " milliseconds!");
+		logger.info("Predicate checks took " + elapsed + " ms!");
+		analysisWatch.reset();
 
 		for (AnalysisSeedWithSpecification seed : getAnalysisSeeds()) {
 			if (seed.isSecure()) {
@@ -112,10 +119,14 @@ public abstract class CryptoScanner {
 			}
 		}
 		
+		elapsed = scanWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Static Analysis took " + elapsed + " ms!");
+		scanWatch.reset();
+		scanWatch.start();
 		listener.afterAnalysis();
-		elapsed = analysisWatch.elapsed(TimeUnit.SECONDS);
-		logger.info("Static Analysis took " + elapsed + " milliseconds!");
-//		debugger().afterAnalysis();
+		elapsed = scanWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Report took " + elapsed + " ms!");
+		scanWatch.reset();
 	}
 
 	private void estimateAnalysisTime() {
