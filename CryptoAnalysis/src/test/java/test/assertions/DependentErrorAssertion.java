@@ -2,8 +2,10 @@ package test.assertions;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import com.google.common.collect.Maps;
 import com.google.inject.internal.util.Lists;
 import com.google.inject.internal.util.Sets;
 
@@ -19,7 +21,7 @@ public class DependentErrorAssertion implements Assertion{
 	private List<AbstractError> extractedErrors = Lists.newArrayList();
 	private int thisAssertionID;
 	private int[] precedingAssertionIDs;
-	private List<AbstractError> requiredToBePreceding = Lists.newArrayList();
+	private Map<Integer,List<AbstractError>> idToErrors = Maps.newHashMap();
 	private List<DependentErrorAssertion> listener = Lists.newArrayList();
 	
 	public DependentErrorAssertion(Stmt pred, int thisAssertionID, int... precedingAssertionIDs) {
@@ -30,7 +32,20 @@ public class DependentErrorAssertion implements Assertion{
 
 	@Override
 	public boolean isSatisfied() {
-		return !extractedErrors.isEmpty() && extractedErrors.stream().anyMatch(e -> requiredToBePreceding.stream().allMatch(preceding -> e.getRootErrors().contains(preceding)));
+		if(extractedErrors.isEmpty()) {
+			return false;
+		}
+		nextExtractedError:
+		for(AbstractError e: this.extractedErrors) {
+			for(int id: this.precedingAssertionIDs) {
+				if(!this.idToErrors.containsKey(id) || !this.idToErrors.get(id).stream().anyMatch(preceding -> e.getRootErrors().contains(preceding))){
+					continue nextExtractedError;
+				}
+			}
+			return true;
+		}
+		return false;
+		
 	}
 
 	@Override
@@ -44,12 +59,9 @@ public class DependentErrorAssertion implements Assertion{
 	}
 	
 	public void addErrorOfOtherLocations(AbstractError error, int errorNr) {
-		for(int id: this.precedingAssertionIDs) {
-			if(id == errorNr) {
-				this.requiredToBePreceding.add(error);
-				return;
-			}
-		}
+		List<AbstractError> errorsWithMatchingId = this.idToErrors.getOrDefault(errorNr, Lists.newArrayList());
+		errorsWithMatchingId.add(error);
+		this.idToErrors.put(errorNr, errorsWithMatchingId);
 	}
 
 	public void addError(AbstractError error) {
