@@ -10,4 +10,4 @@ ORDER
 	GetEnc*
 	
 ENSURES
-	randomized[iv] => preparedKeyMaterial[keyMaterial] after GetEnc;
+	preparedKeyMaterial[keyMaterial] after GetEnc;

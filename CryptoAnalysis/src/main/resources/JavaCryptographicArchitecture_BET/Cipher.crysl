@@ -110,8 +110,12 @@ CONSTRAINTS
 	length[cipherText] <= ciphertext_off;
 
 REQUIRES
-	alg(transformation) in {"RSA"} && encmode == 1 => generatedPrivkey[key];
-	alg(transformation) in {"RSA"} && encmode == 2 => generatedPubkey[key];
+	alg(transformation) in {"RSA"} && encmode == 2 => generatedPrivkey[key];
+	alg(transformation) in {"RSA"} && encmode == 1 => generatedPubkey[key];
+	alg(transformation) in {"AES", "PBEWithHmacSHA224AndAES_128", "PBEWithHmacSHA256AndAES_128", 
+									"PBEWithHmacSHA384AndAES_128", "PBEWithHmacSHA512AndAES_128", 
+									"PBEWithHmacSHA224AndAES_256", "PBEWithHmacSHA256AndAES_256", 
+									"PBEWithHmacSHA384AndAES_256", "PBEWithHmacSHA512AndAES_256"} && encmode == 1 => randomizedGeneratedKey[key];
 	generatedKey[key, alg(transformation)];
 	randomized[ranGen];
 	preparedAlg[param, alg(transformation)];

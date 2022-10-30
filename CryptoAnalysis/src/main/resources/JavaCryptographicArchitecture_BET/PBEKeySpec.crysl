@@ -29,4 +29,5 @@ ENSURES
 
 NEGATES
 	speccedKey[this, _] after ClearPass;
+	randomizedSpeccedKey[this, _] after ClearPass;
 	

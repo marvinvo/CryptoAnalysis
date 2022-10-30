@@ -33,4 +33,5 @@ REQUIRES
     
 ENSURES 
 	generatedKey[key, secretKeyAlgorithm];
+	randomizedGeneratedKey[key, secretKeyAlgorithm];
 	
