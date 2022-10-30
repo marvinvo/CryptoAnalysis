@@ -25,7 +25,9 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
 
 import org.junit.Test;
 
@@ -34,7 +36,10 @@ import crypto.analysis.CrySLRulesetSelector.Ruleset;
 import test.UsagePatternTestingFramework;
 import test.assertions.Assertions;
 
-public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingFramework{
+public class SubsequentErrorTestsFromLWintersThesis_BET extends UsagePatternTestingFramework{
+	
+	// Settings
+	// This sets up CCSubs with Backward Error Tracking
 	
 	@Override
 	protected CryptoScannerSettings getSettings() {
@@ -42,6 +47,15 @@ public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTest
 		settings.setSubsequentErrorDetection(true);
 		return settings;
 	}
+	
+	@Override
+	protected Ruleset getRuleSet() {
+		return Ruleset.JavaCryptographicArchitecture_BET;
+	}
+	
+	//
+	// Tests from Winter
+	//
 
 	@Test
 	public void constraintErrorTest() throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, UnsupportedEncodingException, IllegalBlockSizeException, BadPaddingException{
@@ -163,7 +177,7 @@ public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTest
 		//Create and initialize cipher object
 		Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
 		cipher.init(Cipher.ENCRYPT_MODE, secretKey, iv);
-		Assertions.dependentError(1, 2); // subsequent error
+		Assertions.dependentError(1, 0); // subsequent error
 
 		// encrypt
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
@@ -222,12 +236,13 @@ public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTest
 		
 		//java.security.KeyPair
 		KeyPair keyPair = new KeyPair(publicKey, privateKey);
-		Assertions.dependentError(2, 1, 0);
+		Assertions.dependentError(2, 0);
+		Assertions.dependentError(3, 1);
 
 		//javax.crypto.Cipher
 		Cipher cipher = Cipher.getInstance("RSA");
-		cipher.init(Cipher.ENCRYPT_MODE, keyPair.getPrivate());
-		Assertions.dependentError(3, 2);
+		cipher.init(Cipher.ENCRYPT_MODE, keyPair.getPublic());
+		Assertions.dependentError(4, 3, 2);
 		
 
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
@@ -290,15 +305,14 @@ public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTest
 	public void secureIV() throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, UnsupportedEncodingException, IllegalBlockSizeException, BadPaddingException {
 		//Generate Key
 		KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
-		SecureRandom secureRandom = new SecureRandom();
-		int keyBitSize = 128;
-		keyGenerator.init(keyBitSize, secureRandom);
 		SecretKey secretKey = keyGenerator.generateKey();
+		Assertions.hasEnsuredPredicate(secretKey, "randomizedGeneratedKey");
 
 		byte[] ivBytes = new byte[16];
 		new SecureRandom().nextBytes(ivBytes);
 
 		IvParameterSpec iv = new IvParameterSpec(ivBytes);
+		Assertions.hasEnsuredPredicate(iv, "randomizedPreparedIV");
 
 		//Create and initialize cipher object
 		Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
@@ -308,7 +322,7 @@ public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTest
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
 		byte[] cipherText = cipher.doFinal(plainText);
 		
-		Assertions.predicateErrors(0);
+		//Assertions.predicateErrors(0);
 		Assertions.constraintErrors(0);
 		Assertions.typestateErrors(0);
 	}
@@ -347,62 +361,8 @@ public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTest
 	}
 	
 	//
-	// NEW TESTS
+	// Improvement
 	//
-	
-	@Test
-	public void usingNotRandomizedIVForDecryption() throws Exception{
-		//Generate Key
-			KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
-			SecureRandom secureRandom = new SecureRandom();
-			int keyBitSize = 128;
-			keyGenerator.init(keyBitSize, secureRandom);
-			SecretKey secretKey = keyGenerator.generateKey();
-
-			byte[] ivBytes = "notRandomizedIV".getBytes();
-
-			IvParameterSpec iv = new IvParameterSpec(ivBytes); // this does not report an error
-
-			//Create and initialize cipher object
-			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-			cipher.init(Cipher.DECRYPT_MODE, secretKey, iv);
-
-			// encrypt
-			byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
-			byte[] cipherText = cipher.doFinal(plainText);
-			
-			Assertions.predicateErrors(0);
-			Assertions.constraintErrors(0);
-			Assertions.typestateErrors(0);
-	}
-	
-	@Test
-	public void usingNotRandomizedIVForEncryption() throws Exception{
-		//Generate Key
-			KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
-			SecureRandom secureRandom = new SecureRandom();
-			int keyBitSize = 128;
-			keyGenerator.init(keyBitSize, secureRandom);
-			SecretKey secretKey = keyGenerator.generateKey();
-
-			byte[] ivBytes = "notRandomizedIV".getBytes();
-
-			IvParameterSpec iv = new IvParameterSpec(ivBytes); // this reports a root error
-			Assertions.dependentError(0);
-
-			//Create and initialize cipher object
-			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-			cipher.init(Cipher.ENCRYPT_MODE, secretKey, iv);
-			Assertions.dependentError(1, 0); // subsequent error
-
-			// encrypt
-			byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
-			byte[] cipherText = cipher.doFinal(plainText);
-			
-			Assertions.predicateErrors(2);
-			Assertions.constraintErrors(0);
-			Assertions.typestateErrors(0);
-	}
 	
 	@Test
 	public void darkpredicatesAreBoundToGeneratingObject() throws Exception {
@@ -432,8 +392,4 @@ public class BET_SubsequentErrorTestsFromLWintersThesis extends UsagePatternTest
 		return ivSpec;
 	}
 	
-	@Override
-	protected Ruleset getRuleSet() {
-		return Ruleset.JavaCryptographicArchitecture_BET;
-	}
 }

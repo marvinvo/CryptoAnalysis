@@ -36,12 +36,24 @@ import test.assertions.Assertions;
 
 public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingFramework{
 	
+	// Settings
+	// This sets up CCSubs without Backward Error Tracking
+	
 	@Override
 	protected CryptoScannerSettings getSettings() {
 		CryptoScannerSettings settings = new CryptoScannerSettings();
 		settings.setSubsequentErrorDetection(true);
 		return settings;
 	}
+	
+	@Override
+	protected Ruleset getRuleSet() {
+		return Ruleset.JavaCryptographicArchitecture;
+	}
+	
+	//
+	// Tests from Winter
+	//
 
 	@Test
 	public void constraintErrorTest() throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, UnsupportedEncodingException, IllegalBlockSizeException, BadPaddingException{
@@ -164,7 +176,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		//Create and initialize cipher object
 		Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
 		cipher.init(Cipher.ENCRYPT_MODE, secretKey, iv);
-		Assertions.dependentError(1, 2); // subsequent error
+		Assertions.dependentError(1, 0); // subsequent error
 
 		// encrypt
 		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
@@ -347,7 +359,7 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		}
 	}
 	
-	// LIMITATIONS OF POC
+	// LIMITATION OF POC
 	
 	@Test
 	public void darkpredicatesAreBoundToGeneratingObject() throws NoSuchAlgorithmException {
@@ -372,9 +384,5 @@ public class SubsequentErrorTestsFromLWintersThesis extends UsagePatternTestingF
 		Assertions.dependentError(2);
 		return ivSpec;
 	}
-	
-	@Override
-	protected Ruleset getRuleSet() {
-		return Ruleset.JavaCryptographicArchitecture;
-	}
+
 }
