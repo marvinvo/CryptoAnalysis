@@ -23,6 +23,7 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -73,78 +74,6 @@ public class LimitationsCCSubs extends UsagePatternTestingFramework{
 		return defaultKey;
 	}
 	
-	@Test
-	public void usingNotRandomizedSaltForPBEAndEncryption() throws Exception{
-		char[] password = "test".toCharArray();
-		
-		// Generate Randomized Iv for CBC Mode
-		byte[] ivBytes = new byte[128];
-		new SecureRandom().nextBytes(ivBytes);
-		IvParameterSpec iv = new IvParameterSpec(ivBytes);
-		
-		// Generate Salt which is insecure for encryption
-		byte[] salt = "notRandomizedSalt".getBytes();
-		
-		// Generate SecretKey from Password
-		PBEKeySpec pbeKeySpec = new PBEKeySpec(password, salt, 40000, 256);
-		Assertions.dependentError(0);
-		
-		pbeKeySpec.clearPassword();
-		
-		SecretKeyFactory skf = SecretKeyFactory.getInstance("PBEWithHmacSHA224AndAES_256");
-		SecretKey sk = skf.generateSecret(pbeKeySpec);
-		//Assertions.dependentError(1, 0); // this should be a subsequent error, but fails
-		Assertions.dependentError(1);
-		
-		//Create and initialize cipher object
-		Cipher cipher = Cipher.getInstance("PBEWithHmacSHA224AndAES_256/CBC/PKCS5Padding");
-		cipher.init(Cipher.ENCRYPT_MODE, sk, iv);
-		Assertions.dependentError(2, 1); // subsequent error
-		
-		// encrypt
-		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
-		byte[] cipherText = cipher.doFinal(plainText);
-		
-	}
-	
-	@Test
-	public void usingNotRandomizedSaltForPBEDecryption() throws Exception{
-		//Generate Key
-		final byte[] salt = new byte[32];
-		Assertions.notHasEnsuredPredicate(salt, "randomized");
-
-		// salt is not required to be randomized when the key is not used for encryption
-		final PBEKeySpec pbekeyspec = new PBEKeySpec(generateRandomPassword(), salt, 65000, 128);
-		
-		Assertions.hasEnsuredPredicate(pbekeyspec, "speccedKey");
-		Assertions.notHasEnsuredPredicate(pbekeyspec, "randomizedSpeccedKey");
-
-		SecretKeyFactory skf = SecretKeyFactory.getInstance("PBEWithHmacSHA512AndAES_256");
-		SecretKey sk = skf.generateSecret(pbekeyspec);
-		Assertions.hasEnsuredPredicate(sk, "generatedKey");
-		Assertions.notHasEnsuredPredicate(sk, "randomizedGeneratedKey");
-		
-
-		byte[] ivBytes = "notRandomizedIV".getBytes();
-		(new SecureRandom()).nextBytes(ivBytes);
-		Assertions.hasEnsuredPredicate(ivBytes, "randomized");
-		IvParameterSpec iv = new IvParameterSpec(ivBytes);
-
-		// Create and initialize cipher object
-		Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-		cipher.init(Cipher.DECRYPT_MODE, sk, iv); // this causes a false positive
-
-		// encrypt
-		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
-		byte[] cipherText = cipher.doFinal(plainText);
-		
-		pbekeyspec.clearPassword();
-		
-		// all secure
-		Assertions.predicateErrors(0); // fails
-		Assertions.constraintErrors(0);
-		Assertions.typestateErrors(0);
-	}
 	
 	@Test
 	public void multiplePrecedingErrorsFailsBecauseOfCCSAST() throws Exception{
@@ -160,5 +89,29 @@ public class LimitationsCCSubs extends UsagePatternTestingFramework{
 		Assertions.dependentError(2,1,0);
 		SecretKey key = kg.generateKey();
 	}
+	
+	@Test
+	public void missingErrorsWhenCallingAMethodMultipleTimes() throws Exception {
+		X509EncodedKeySpec keySpec1 = new X509EncodedKeySpec("insecureKeyBytes".getBytes()); // RequiredPredicateError
+		Assertions.dependentError(0); // passes
+		X509EncodedKeySpec keySpec2 = new X509EncodedKeySpec("insecureKeyBytes".getBytes()); // RequiredPredicateError
+		Assertions.dependentError(1); // passes
+		
+		Assertions.notHasEnsuredPredicate(keySpec1, "speccedKey");
+		Assertions.notHasEnsuredPredicate(keySpec2, "speccedKey");
+		
+		KeyFactory kf = KeyFactory.getInstance("RSA");
+		PublicKey pubkey1 = kf.generatePublic(keySpec1); // RequiredPredicateError
+		Assertions.dependentError(2, 0); // passes
+		Assertions.notHasEnsuredPredicate(pubkey1);
+		// generating another public key is not a typestate misuse, but the additional RequiredPredicateError is not reported
+		PublicKey pubkey2 = kf.generatePublic(keySpec2); // missing RequiredPredicateError
+		Assertions.dependentError(3, 1); // fails due to missing error
+		Assertions.notHasEnsuredPredicate(pubkey2);
+		
+		Assertions.predicateErrors(4); // fails
+	}
+	
+	
 	
 }

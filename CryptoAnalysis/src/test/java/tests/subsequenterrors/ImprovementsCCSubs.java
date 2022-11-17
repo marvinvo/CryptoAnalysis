@@ -5,16 +5,20 @@ import java.io.FileInputStream;
 import java.math.BigInteger;
 import java.security.GeneralSecurityException;
 import java.security.Key;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.spec.RSAKeyGenParameterSpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.security.Signature;
 
 import javax.crypto.Cipher;
+import javax.crypto.CipherInputStream;
 import javax.crypto.KeyGenerator;
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
@@ -259,6 +263,23 @@ public class ImprovementsCCSubs extends UsagePatternTestingFramework{
 	//
 	// Subsequent Error Detection and Mapping Tests
 	//
+	
+	@Test
+	public void multiplePrecedingErrors() throws Exception{
+	    KeyGenerator keyGenerator = KeyGenerator.getInstance("DES"); // root error
+	    Assertions.dependentError(0); 
+	    
+	    SecretKey key = keyGenerator.generateKey();
+
+	    Cipher cipher = Cipher.getInstance("DES"); // root error
+	    Assertions.dependentError(1);
+	    
+	    cipher.init(Cipher.ENCRYPT_MODE, key); // subsequent error
+	    Assertions.dependentError(2, 0);
+	    
+	    CipherInputStream cis = new CipherInputStream(new FileInputStream("unimportant"), cipher); // subsequent error
+	    Assertions.dependentError(3, 2, 1); 
+	}
 		
 	@Test
 	public void SEDAMTestKeyStoreWithSignature() throws Exception{
@@ -380,6 +401,81 @@ public class ImprovementsCCSubs extends UsagePatternTestingFramework{
 		Assertions.dependentError(3, 2);
 	}
 	
+	@Test
+	public void usingNotRandomizedSaltForPBEAndEncryption() throws Exception{
+		char[] password = "test".toCharArray();
+		
+		// Generate Randomized Iv for CBC Mode
+		byte[] ivBytes = new byte[128];
+		new SecureRandom().nextBytes(ivBytes);
+		IvParameterSpec iv = new IvParameterSpec(ivBytes);
+		
+		// Generate Salt which is insecure for encryption
+		byte[] salt = "notRandomizedSalt".getBytes();
+		
+		// Generate SecretKey from Password
+		PBEKeySpec pbeKeySpec = new PBEKeySpec(password, salt, 40000, 256);
+		Assertions.dependentError(0);
+		
+		SecretKeyFactory skf = SecretKeyFactory.getInstance("PBEWithHmacSHA224AndAES_256");
+		SecretKey sk = skf.generateSecret(pbeKeySpec);
+		Assertions.dependentError(1, 0);
+		
+		pbeKeySpec.clearPassword();
+		
+		//Create and initialize cipher object
+		Cipher cipher = Cipher.getInstance("PBEWithHmacSHA224AndAES_256/CBC/PKCS5Padding");
+		cipher.init(Cipher.ENCRYPT_MODE, sk, iv);
+		Assertions.dependentError(2, 1); // subsequent error
+		
+		// encrypt
+		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
+		byte[] cipherText = cipher.doFinal(plainText);
+		
+	}
+	
+	@Test
+	public void usingNotRandomizedSaltForPBEDecryption() throws Exception{
+		//Generate Key
+		final byte[] salt = new byte[32];
+		Assertions.notHasEnsuredPredicate(salt, "randomized");
+
+		// salt is not required to be randomized when the key is not used for encryption
+		final PBEKeySpec pbekeyspec = new PBEKeySpec(generateRandomPassword(), salt, 65000, 128);
+		
+		Assertions.hasEnsuredPredicate(pbekeyspec, "speccedKey");
+		Assertions.notHasEnsuredPredicate(pbekeyspec, "randomizedSpeccedKey");
+
+		SecretKeyFactory skf = SecretKeyFactory.getInstance("PBEWithHmacSHA512AndAES_256");
+		
+		SecretKey sk = skf.generateSecret(pbekeyspec);
+		Assertions.hasEnsuredPredicate(sk, "generatedKey");
+		Assertions.notHasEnsuredPredicate(sk, "randomizedGeneratedKey");
+		
+		pbekeyspec.clearPassword();
+		
+		
+		byte[] ivBytes = "notRandomizedIV".getBytes();
+		(new SecureRandom()).nextBytes(ivBytes);
+		Assertions.hasEnsuredPredicate(ivBytes, "randomized");
+		IvParameterSpec iv = new IvParameterSpec(ivBytes);
+
+		// Create and initialize cipher object
+		Cipher cipher = Cipher.getInstance("PBEWithHmacSHA512AndAES_256/CBC/PKCS5Padding");
+		cipher.init(Cipher.DECRYPT_MODE, sk, iv);
+		
+		
+		// encrypt
+		byte[] plainText = "ThisIsThePlainText".getBytes("UTF-8");
+		byte[] cipherText = cipher.doFinal(plainText);
+		
+		
+		// all secure
+		Assertions.predicateErrors(0);
+		Assertions.constraintErrors(0);
+		Assertions.typestateErrors(0);
+	}
+	
 	//
 	// Dark Predicates are bound to the Objects they are generated on
 	//
@@ -446,6 +542,51 @@ public class ImprovementsCCSubs extends UsagePatternTestingFramework{
 		keyGenerator3.init(128, sr1);
 		Assertions.dependentError(5, 0);
 
+	}
+	
+	@Test
+	public void DarkPredicateTest3() throws Exception {
+		// generate key spec
+		X509EncodedKeySpec keySpec1 = new X509EncodedKeySpec("insecureKeyBytes".getBytes());
+		Assertions.dependentError(0);
+		X509EncodedKeySpec keySpec2 = new X509EncodedKeySpec("insecureKeyBytes".getBytes());
+		Assertions.dependentError(1);
+		X509EncodedKeySpec keySpec3 = new X509EncodedKeySpec("insecureKeyBytes".getBytes());
+		Assertions.dependentError(2);
+		
+		Assertions.notHasEnsuredPredicate(keySpec1, "speccedKey");
+		Assertions.notHasEnsuredPredicate(keySpec2, "speccedKey");
+		Assertions.notHasEnsuredPredicate(keySpec3, "speccedKey");
+		
+		// create public keys
+		KeyFactory kf = KeyFactory.getInstance("RSA");
+		PublicKey pubkey1 = kf.generatePublic(keySpec1);
+		Assertions.dependentError(3, 0);
+		Assertions.notHasEnsuredPredicate(pubkey1);
+		
+		kf = KeyFactory.getInstance("RSA");
+		PublicKey pubkey3 = kf.generatePublic(keySpec3);
+		Assertions.dependentError(5, 2);
+		Assertions.notHasEnsuredPredicate(pubkey3);
+		
+		kf = KeyFactory.getInstance("RSA");
+		PublicKey pubkey2 = kf.generatePublic(keySpec2);
+		Assertions.dependentError(4, 1);
+		Assertions.notHasEnsuredPredicate(pubkey2);
+		
+	
+		// sign with public keys
+		Signature signature1 = Signature.getInstance("SHA256withRSA");
+		signature1.initVerify(pubkey3);
+		Assertions.dependentError(6, 5);
+		
+		Signature signature2 = Signature.getInstance("SHA256withRSA");
+		signature2.initVerify(pubkey2);
+		Assertions.dependentError(7, 4);
+		
+		Signature signature3 = Signature.getInstance("SHA256withRSA");
+		signature3.initVerify(pubkey1);
+		Assertions.dependentError(8, 3);
 	}
 	
 }

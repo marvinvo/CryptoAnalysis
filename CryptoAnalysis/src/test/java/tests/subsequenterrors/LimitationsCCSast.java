@@ -21,6 +21,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.RSAKeyGenParameterSpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -61,14 +62,19 @@ public class LimitationsCCSast extends UsagePatternTestingFramework{
 	@Test
 	public void predicateHandlerNotPropagatePredicateOnThis() throws Exception{
 		SecureRandom sr = SecureRandom.getInstance("SHA1PRNG");
+		Assertions.hasEnsuredPredicate(sr, "randomized");
+		
 		byte[] secureBytes = new byte[32];
 		(new SecureRandom()).nextBytes(secureBytes);
+		Assertions.hasEnsuredPredicate(secureBytes, "randomized");
+		
 		sr.setSeed(secureBytes);
-		KeyGenerator kg = KeyGenerator.getInstance("AES");
-		kg.init(128, sr);
-		SecretKey key = kg.generateKey();
 		// all secure
-		Assertions.predicateErrors(0); // fails
+		
+		Assertions.hasEnsuredPredicate(sr, "randomized"); // fails
+		Assertions.predicateErrors(0); // passes
+		Assertions.constraintErrors(0); // passes
+		Assertions.typestateErrors(0); // passes
 	}
 	
 	@Test
@@ -161,7 +167,24 @@ public class LimitationsCCSast extends UsagePatternTestingFramework{
 		Cipher c = Cipher.getInstance("RSA");
 		c.init(Cipher.DECRYPT_MODE, keyPair.getPublic());
 		Assertions.predicateErrors(1); // fails
-
+	}
+	
+	@Test
+	public void missingErrorsWhenCallingAMethodMultipleTimes() throws Exception {
+		X509EncodedKeySpec keySpec1 = new X509EncodedKeySpec("insecureKeyBytes".getBytes()); // RequiredPredicateError
+		X509EncodedKeySpec keySpec2 = new X509EncodedKeySpec("insecureKeyBytes".getBytes()); // RequiredPredicateError
+		
+		Assertions.notHasEnsuredPredicate(keySpec1, "speccedKey");
+		Assertions.notHasEnsuredPredicate(keySpec2, "speccedKey");
+		
+		KeyFactory kf = KeyFactory.getInstance("RSA");
+		PublicKey pubkey1 = kf.generatePublic(keySpec1); // RequiredPredicateError
+		Assertions.notHasEnsuredPredicate(pubkey1);
+		// generating another public key is not a typestate misuse, but the additional RequiredPredicateError is not reported
+		PublicKey pubkey2 = kf.generatePublic(keySpec2); // missing RequiredPredicateError
+		Assertions.notHasEnsuredPredicate(pubkey2);
+		
+		Assertions.predicateErrors(4); // fails
 	}
 	
 	
