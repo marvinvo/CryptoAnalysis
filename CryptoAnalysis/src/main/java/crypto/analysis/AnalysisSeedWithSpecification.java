@@ -87,9 +87,6 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	// predicates
 	private Collection<EnsuredCrySLPredicate> ensuredPredicates = Sets.newHashSet();
 	private Collection<DarkPredicate> darkPredicates = Sets.newHashSet();
-	private Collection<DarkPredicate> neededDarkPreds = null;
-	private Set<ISLConstraint> missingPredicates = null;
-	private Set<ISLConstraint> missingPredicatesWithDarkPreds = null;
 	private Collection<EnsuredCrySLPredicate> indirectlyEnsuredPredicates = Sets.newHashSet(); //TODO: check if this still has an usage
 
 	/**

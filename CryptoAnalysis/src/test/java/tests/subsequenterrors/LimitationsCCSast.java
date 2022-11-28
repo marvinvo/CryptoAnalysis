@@ -26,6 +26,7 @@ import java.security.spec.X509EncodedKeySpec;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
@@ -53,6 +54,25 @@ public class LimitationsCCSast extends UsagePatternTestingFramework{
 	@Override
 	protected Ruleset getRuleSet() {
 		return Ruleset.JavaCryptographicArchitecture;
+	}
+	
+	//
+	// BUGS IN CCSAST WE FIX
+	//
+	
+	@Test
+	public void missingRequiredPredicateCheck() throws Exception {
+		// securely generate Key
+		KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH");
+		kpg.initialize(1024); // Constraint Error
+		PrivateKey pk = kpg.generateKeyPair().getPrivate();
+		Assertions.notHasEnsuredPredicate(pk, "generatedKey");
+		Assertions.notHasEnsuredPredicate(pk, "generatedPrivkey");
+		
+		KeyAgreement ka = KeyAgreement.getInstance("DH");
+		ka.init(pk, SecureRandom.getInstanceStrong());
+		Assertions.constraintErrors(1);
+		Assertions.predicateErrors(1); //fails
 	}
 	
 	//

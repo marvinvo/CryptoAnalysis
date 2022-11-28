@@ -9,6 +9,7 @@ import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.spec.RSAKeyGenParameterSpec;
@@ -17,6 +18,7 @@ import java.security.Signature;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
+import javax.crypto.KeyAgreement;
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
@@ -53,6 +55,25 @@ public class ImprovementsCCSubs extends UsagePatternTestingFramework{
 		return Ruleset.JavaCryptographicArchitecture_BET;
 	}
 	
+	//
+	// Fix missing required predicate checks
+	//
+	
+	@Test
+	public void fixMissingRequiredPredicateCheck() throws Exception {
+		// securely generate Key
+		KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH");
+		kpg.initialize(1024); // Constraint Error
+		PrivateKey pk = kpg.generateKeyPair().getPrivate();
+		Assertions.notHasEnsuredPredicate(pk, "generatedKey");
+		Assertions.notHasEnsuredPredicate(pk, "generatedPrivkey");
+		
+		KeyAgreement ka = KeyAgreement.getInstance("DH");
+		ka.init(pk, SecureRandom.getInstanceStrong());
+		Assertions.constraintErrors(1);
+		Assertions.predicateErrors(1); // passes
+	}
+		
 		
 	//
 	// Predicate Ensuring Constraint Condition Tests
