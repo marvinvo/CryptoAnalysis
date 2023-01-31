@@ -43,6 +43,9 @@ public class SARIFConfig {
 	public static final String RESOURCES_KEY = "resources";
 	public static final String RULES_KEY = "rules";
 	public static final String RULES_ID_KEY = "id";
+	public static final String Error_ID_KEY = "error_id";
+	public static final String Preceding_Errors_KEY = "preceding_error_ids";
+	public static final String Subsequent_Errors_KEY = "subsequent_error_ids";
 	public static final String FULL_DESCRIPTION_KEY = "fullDescription";
 	
 	//rules and their descriptions
@@ -52,6 +55,8 @@ public class SARIFConfig {
 	public static final String NEVER_TYPE_OF_ERROR_VALUE = "Reported when a value was found to be of a certain reference type: For example, a character array containing a password should never be converted from a String";
 	public static final String HARDCODED_ERROR_KEY = "HardCodedError";
 	public static final String HARDCODED_ERROR_VALUE = "A hardcoded value was found. Load the value dynamically from a data storage.";
+	public static final String INSTANCE_OF_ERROR_KEY = "InstanceOfError";
+	public static final String INSTANCE_OF_ERROR_VALUE = "Reported when a value was found to be of a reference type that does not match a specified type.";
 	public static final String FORBIDDEN_METHOD_ERROR_KEY = "ForbiddenMethodError";
 	public static final String FORBIDDEN_METHOD_ERROR_VALUE = "A method that is forbidden (CrySL block FORBIDDEN) to be called under some circumstances was found.";
 	public static final String IMPRECISE_VALUE_EXTRACTION_ERROR_KEY = "ImpreciseValueExtractionError";

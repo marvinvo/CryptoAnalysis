@@ -90,6 +90,7 @@ public class ConstraintSolver {
 		this.allConstraints = this.classSpec.getRule().getConstraints();
 		for (ISLConstraint cons : allConstraints) {
 
+			// to check if all varnames can be resolved
 			Set<String> involvedVarNames = cons.getInvolvedVarNames();
 			for (CallSiteWithParamIndex cwpi : this.parameterAnalysisQuerySites) {
 				involvedVarNames.remove(cwpi.getVarName());
@@ -108,6 +109,9 @@ public class ConstraintSolver {
 				} else if (cons instanceof CrySLConstraint) {
 					ISLConstraint right = ((CrySLConstraint) cons).getRight();
 					if (right instanceof CrySLPredicate && !predefinedPreds.contains(((CrySLPredicate) right).getPredName())) {
+						// by design, the non-predefined preds can only appear in REQUIRES section.
+						// further, expressions in REQUIRES are connected with a logical or
+						// and expressions may only be an implication in form of ((Constraint|Pred) =>)? Pred
 						requiredPredicates.add(collectAlternativePredicates((CrySLConstraint) cons, null));
 					} else {
 						relConstraints.add(cons);
@@ -120,6 +124,14 @@ public class ConstraintSolver {
 		this.reporter = crySLResultsReporter;
 	}
 
+	/**
+	 * This method will convert CrySLConstraints to AlternativeReqPredicates.
+	 * In instance, the AlternativeReqPredicates will replace the logical or operator in CrySLConstraints.
+	 * 
+	 * @param cons
+	 * @param alt
+	 * @return
+	 */
 	private ISLConstraint collectAlternativePredicates(CrySLConstraint cons, AlternativeReqPredicate alt) {
 		CrySLPredicate right = (CrySLPredicate) cons.getRight();
 		if (alt == null) {
@@ -137,7 +149,7 @@ public class ConstraintSolver {
 		return alt;
 	}
 
-	private RequiredCrySLPredicate retrieveValuesForPred(ISLConstraint cons) {
+	public RequiredCrySLPredicate retrieveValuesForPred(ISLConstraint cons) {
 		CrySLPredicate pred = (CrySLPredicate) cons;
 		for (CallSiteWithParamIndex cwpi : this.parameterAnalysisQuerySites) {
 			for (ICrySLPredicateParameter p : pred.getParameters()) {
@@ -148,6 +160,9 @@ public class ConstraintSolver {
 					return new RequiredCrySLPredicate(pred, cwpi.stmt());
 				}
 			}
+		}
+		if(pred.getParameters().stream().anyMatch(param -> param.getName().equals("this"))) {
+			return new RequiredCrySLPredicate(pred, object.stmt());
 		}
 		return null;
 	}
@@ -175,6 +190,7 @@ public class ConstraintSolver {
 					break;
 				} else {
 					fail++;
+					this.object.addError(e);
 					reporter.reportError(object, e);
 				}
 			}
@@ -359,7 +375,7 @@ public class ConstraintSolver {
 					for (CallSiteWithParamIndex cs : parameterAnalysisQuerySites) {
 						if (cs.getVarName().equals(varName)) {
 							Collection<Type> vals = propagatedTypes.get(cs);
-							if (!vals.parallelStream().anyMatch(e -> isSubType(e.toQuotedString(), parameters.get(1).getName()) || isSubType(parameters.get(1).getName(), e.toQuotedString()))) {
+							if (!vals.parallelStream().anyMatch(e -> isSubType(parameters.get(1).getName(), e.toQuotedString()))) {
 								for (ExtractedValue v : parsAndVals.get(cs)) {
 									errors.add(new InstanceOfError(new CallSiteWithExtractedValue(cs, v), classSpec.getRule(), object, pred));
 								}
@@ -603,7 +619,7 @@ public class ConstraintSolver {
 			origin = con;
 		}
 
-		protected Collection<AbstractError> getErrors() {
+		public Collection<AbstractError> getErrors() {
 			return errors;
 		};
 

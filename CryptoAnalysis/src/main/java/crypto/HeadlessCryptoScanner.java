@@ -1,6 +1,7 @@
 package crypto;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -16,12 +17,12 @@ import boomerang.callgraph.ObservableICFG;
 import boomerang.debugger.Debugger;
 import boomerang.debugger.IDEVizDebugger;
 import boomerang.preanalysis.BoomerangPretransformer;
+import crypto.HeadlessCryptoScannerSettings.ControlGraph;
+import crypto.HeadlessCryptoScannerSettings.ReportFormat;
+import crypto.HeadlessCryptoScannerSettings;
 import crypto.analysis.CrySLAnalysisListener;
 import crypto.analysis.CrySLResultsReporter;
 import crypto.analysis.CryptoScanner;
-import crypto.analysis.CryptoScannerSettings;
-import crypto.analysis.CryptoScannerSettings.ControlGraph;
-import crypto.analysis.CryptoScannerSettings.ReportFormat;
 import crypto.analysis.IAnalysisSeed;
 import crypto.exceptions.CryptoAnalysisException;
 import crypto.exceptions.CryptoAnalysisParserException;
@@ -53,7 +54,7 @@ import typestate.TransitionFunction;
 
 public abstract class HeadlessCryptoScanner {
 	
-	private static CryptoScannerSettings settings = new CryptoScannerSettings();
+	private static HeadlessCryptoScannerSettings settings = new HeadlessCryptoScannerSettings();
 	private boolean hasSeeds;
 	private static Stopwatch callGraphWatch;
 	private static List<CrySLRule> rules = Lists.newArrayList();
@@ -82,6 +83,7 @@ public abstract class HeadlessCryptoScanner {
 			@Override
 			protected List<CrySLRule> getRules() {
 				// TODO: Somehow optimize the rule getting because this has many code duplicates for no reason.
+				Stopwatch ruletime = Stopwatch.createStarted();
 				switch(settings.getRulesetPathType()) {
 					case DIR:
 						try {
@@ -102,6 +104,9 @@ public abstract class HeadlessCryptoScanner {
 					default:
 						LOGGER.error("Error happened when getting the CrySL rules from the specified file.");
 				}
+				long elapsed = ruletime.elapsed(TimeUnit.MILLISECONDS);
+				ruletime.reset();
+				LOGGER.info("Read CrySL Rules in {} ms", elapsed);
 				return rules;
 			}
 			
@@ -117,9 +122,9 @@ public abstract class HeadlessCryptoScanner {
 			} catch (CryptoAnalysisException e) {
 				LOGGER.error("Error happened when executing HeadlessCryptoScanner.", e);
 			}
-			LOGGER.info("Pre-Analysis soot setup done in {} ", stopwatch);
+			LOGGER.info("Pre-Analysis soot setup done in {} ms", stopwatch.elapsed(TimeUnit.MILLISECONDS));
 			checkIfUsesObject();
-			LOGGER.info("Pre-Analysis  finished in {}", stopwatch);
+			LOGGER.info("Pre-Analysis  finished in {} ms", stopwatch.elapsed(TimeUnit.MILLISECONDS));
 		}
 		if (!isPreAnalysis() || hasSeeds()) {
 			LOGGER.info("Using call graph algorithm {}", callGraphAlgorithm());
@@ -128,9 +133,9 @@ public abstract class HeadlessCryptoScanner {
 			} catch (CryptoAnalysisException e) {
 				LOGGER.error("Error happened when executing HeadlessCryptoScanner.", e);
 			}
-			LOGGER.info("Analysis soot setup done in {} ",stopwatch);
+			LOGGER.info("Analysis soot setup done in {} ms",stopwatch.elapsed(TimeUnit.MILLISECONDS));
 			analyse();
-			LOGGER.info("Analysis finished in {}", stopwatch);
+			LOGGER.info("Analysis finished in {} ms", stopwatch.elapsed(TimeUnit.MILLISECONDS));
 		}
 	}
 
@@ -179,6 +184,8 @@ public abstract class HeadlessCryptoScanner {
 				BoomerangPretransformer.v().reset();
 				BoomerangPretransformer.v().apply();
 				ObservableDynamicICFG observableDynamicICFG = new ObservableDynamicICFG(false);
+				LOGGER.info("Callgraph constructed in {} ms", callGraphWatch.elapsed(TimeUnit.MILLISECONDS));
+				Stopwatch setupWatch = Stopwatch.createStarted();
 				List<CrySLRule> rules = HeadlessCryptoScanner.rules;
 				
 				long callgraphConstructionTime = callGraphWatch.elapsed(TimeUnit.MILLISECONDS);
@@ -226,7 +233,7 @@ public abstract class HeadlessCryptoScanner {
 					reporter.addReportListener(getAdditionalListener());	
 				}
 				
-				CryptoScanner scanner = new CryptoScanner() {
+				CryptoScanner scanner = new CryptoScanner(settings.getCryptoScannerSettings()) {
 
 					@Override
 					public ObservableICFG<Unit, SootMethod> icfg() {
@@ -278,6 +285,9 @@ public abstract class HeadlessCryptoScanner {
 					}
 				}
 				
+				long elapsed = setupWatch.elapsed(TimeUnit.MILLISECONDS);
+				setupWatch.reset();
+				LOGGER.info("CryptoScanner setup in {} ms", elapsed);
 				scanner.scan(rules);
 			}
 		};
@@ -308,6 +318,7 @@ public abstract class HeadlessCryptoScanner {
 		Options.v().set_no_bodies_for_excluded(true);
 		Options.v().set_allow_phantom_refs(true);
 		Options.v().set_keep_line_number(true);
+		
 		// JAVA 8
 		if(getJavaVersion() < 9)
 		{

@@ -1,6 +1,9 @@
 package crypto.analysis.errors;
 
+import java.util.Collection;
+
 import boomerang.jimple.Statement;
+import crypto.analysis.DarkPredicate;
 import crypto.extractparameter.CallSiteWithExtractedValue;
 import crypto.reporting.SARIFReporter;
 import crypto.rules.CrySLPredicate;
@@ -18,11 +21,24 @@ public class RequiredPredicateError extends AbstractError{
 
 	private CrySLPredicate contradictedPredicate;
 	private CallSiteWithExtractedValue extractedValues;
+	private DarkPredicate darkPred = null;
 
 	public RequiredPredicateError(CrySLPredicate contradictedPredicate, Statement location, CrySLRule rule, CallSiteWithExtractedValue multimap) {
 		super(location, rule);
 		this.contradictedPredicate = contradictedPredicate;
 		this.extractedValues = multimap;
+	}
+	
+	public void setDarkPredicate(DarkPredicate darkPred) {
+		this.darkPred = darkPred;
+	}
+	
+	public void mapPrecedingErrors() {
+		if(darkPred != null) {
+			Collection<AbstractError> precedingErrors = darkPred.getPrecedingErrors();
+			this.addCausingError(precedingErrors);
+			precedingErrors.forEach(e -> e.addSubsequentError(this));
+		}
 	}
 
 	public CrySLPredicate getContradictedPredicate() {

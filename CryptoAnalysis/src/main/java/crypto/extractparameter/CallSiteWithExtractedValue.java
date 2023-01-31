@@ -33,6 +33,8 @@ public class CallSiteWithExtractedValue {
 	public String toString() {
 		String res = "";
 		switch(cs.getIndex()) {
+			case -1:
+				return "Return value";
 			case 0: 
 				res = "First ";
 				break;

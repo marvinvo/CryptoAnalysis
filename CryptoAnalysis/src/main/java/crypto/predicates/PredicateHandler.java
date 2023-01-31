@@ -1,11 +1,20 @@
 package crypto.predicates;
 
 import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
+
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.collect.Table.Cell;
@@ -16,18 +25,24 @@ import crypto.analysis.AlternativeReqPredicate;
 import crypto.analysis.AnalysisSeedWithSpecification;
 import crypto.analysis.ClassSpecification;
 import crypto.analysis.CryptoScanner;
+import crypto.analysis.DarkPredicate;
 import crypto.analysis.EnsuredCrySLPredicate;
 import crypto.analysis.IAnalysisSeed;
 import crypto.analysis.RequiredCrySLPredicate;
 import crypto.analysis.ResultsHandler;
+import crypto.analysis.errors.AbstractError;
+import crypto.analysis.errors.ErrorWithObjectAllocation;
 import crypto.analysis.errors.PredicateContradictionError;
 import crypto.analysis.errors.RequiredPredicateError;
 import crypto.extractparameter.CallSiteWithExtractedValue;
 import crypto.extractparameter.CallSiteWithParamIndex;
 import crypto.interfaces.ISLConstraint;
 import crypto.rules.CrySLConstraint;
+import crypto.rules.CrySLObject;
 import crypto.rules.CrySLPredicate;
 import crypto.rules.CrySLRule;
+import soot.RefType;
+import soot.SootClass;
 import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
@@ -145,7 +160,7 @@ public class PredicateHandler {
 		return added;
 	}
 
-	/**
+	/**2
 	 * @return the existingPredicates
 	 */
 	public Set<EnsuredCrySLPredicate> getExistingPredicates(Statement stmt, Val seed) {
@@ -158,6 +173,7 @@ public class PredicateHandler {
 	}
 
 	private void onPredicateAdded(IAnalysisSeed seedObj, Statement statement, Val seed, EnsuredCrySLPredicate ensPred) {
+		
 		if (statement.isCallsite()) {
 			InvokeExpr ivexpr = ((Stmt) statement.getUnit().get()).getInvokeExpr();
 			if (ivexpr instanceof InstanceInvokeExpr) {
@@ -197,44 +213,38 @@ public class PredicateHandler {
 		}
 	}
 
-	public void expectPredicate(IAnalysisSeed object, Statement stmt, CrySLPredicate predToBeEnsured) {
+	public void expectPredicate(IAnalysisSeed expectedOn, Statement stmt, CrySLPredicate predToBeEnsured) {
 		for (Unit succ : cryptoScanner.icfg().getSuccsOf(stmt.getUnit().get())) {
-			Set<CrySLPredicate> set = expectedPredicateObjectBased.get(succ, object);
+			Set<CrySLPredicate> set = expectedPredicateObjectBased.get(succ, expectedOn);
 			if (set == null)
 				set = Sets.newHashSet();
 			set.add(predToBeEnsured);
-			expectedPredicateObjectBased.put(new Statement((Stmt) succ, stmt.getMethod()), object, set);
+			expectedPredicateObjectBased.put(new Statement((Stmt) succ, stmt.getMethod()), expectedOn, set);
 		}
 	}
 
 	public void checkPredicates() {
 		checkMissingRequiredPredicates();
 		checkForContradictions();
+		setSubsequentAndRootErrorsForEachError();
 		cryptoScanner.getAnalysisListener().ensuredPredicates(this.existingPredicates, expectedPredicateObjectBased, computeMissingPredicates());
 	}
 
 	private void checkMissingRequiredPredicates() {
 		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
-			Set<ISLConstraint> missingPredicates = seed.getMissingPredicates();
-			for (ISLConstraint pred : missingPredicates) {
-				if (pred instanceof RequiredCrySLPredicate) {
-					reportMissingPred(seed, (RequiredCrySLPredicate) pred);
-				} else if (pred instanceof CrySLConstraint) {
-					for (CrySLPredicate altPred : ((AlternativeReqPredicate) pred).getAlternatives()) {
-						reportMissingPred(seed, new RequiredCrySLPredicate(altPred, altPred.getLocation()));
-					}
-				}
-			}
+			seed.checkAndReportMissingRequiredPredicates();
 		}
 	}
-
-	private void reportMissingPred(AnalysisSeedWithSpecification seed, RequiredCrySLPredicate missingPred) {
-		CrySLRule rule = seed.getSpec().getRule();
-		if (!rule.getPredicates().parallelStream().anyMatch(e -> missingPred.getPred().getPredName().equals(e.getPredName()) && missingPred.getPred().getParameters().get(0).equals(e.getParameters().get(0)))) {
-			for (CallSiteWithParamIndex v : seed.getParameterAnalysis().getAllQuerySites()) {
-				if (missingPred.getPred().getInvolvedVarNames().contains(v.getVarName()) && v.stmt().equals(missingPred.getLocation())) {
-					cryptoScanner.getAnalysisListener().reportError(seed,
-							new RequiredPredicateError(missingPred.getPred(), missingPred.getLocation(), seed.getSpec().getRule(), new CallSiteWithExtractedValue(v, null)));
+	
+	/**
+	 * This method is the logic behind adding subsequent child errors and causing parent errors to each error.
+	 * The subsequent and parent errors are stored by each error itself.
+	 */
+	private void setSubsequentAndRootErrorsForEachError() {
+		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
+			for (AbstractError e: seed.getErrors()) {
+				if(e instanceof RequiredPredicateError) {
+					((RequiredPredicateError) e).mapPrecedingErrors();
 				}
 			}
 		}
@@ -244,9 +254,11 @@ public class PredicateHandler {
 		Set<Entry<CrySLPredicate, CrySLPredicate>> contradictionPairs = new HashSet<Entry<CrySLPredicate, CrySLPredicate>>();
 		for (ClassSpecification c : cryptoScanner.getClassSpecifictions()) {
 			CrySLRule rule = c.getRule();
-			for (ISLConstraint cons : rule.getConstraints()) {
-				if (cons instanceof CrySLPredicate && ((CrySLPredicate) cons).isNegated()) {
-					contradictionPairs.add(new SimpleEntry<CrySLPredicate, CrySLPredicate>(rule.getPredicates().get(0), ((CrySLPredicate) cons).setNegated(false)));
+			if(!rule.getPredicates().isEmpty()) {
+				for (ISLConstraint cons : rule.getConstraints()) {
+					if (cons instanceof CrySLPredicate && ((CrySLPredicate) cons).isNegated()) {
+						contradictionPairs.add(new SimpleEntry<CrySLPredicate, CrySLPredicate>(rule.getPredicates().get(0), ((CrySLPredicate) cons).setNegated(false)));
+					}
 				}
 			}
 		}
@@ -271,7 +283,7 @@ public class PredicateHandler {
 			Set<EnsuredCrySLPredicate> exPreds = existingPredicatesObjectBased.get(c.getRowKey(), c.getColumnKey());
 			if (c.getValue() == null)
 				continue;
-			HashSet<CrySLPredicate> expectedPreds = new HashSet<>(c.getValue());
+			Set<CrySLPredicate> expectedPreds = Sets.newHashSet(c.getValue());
 			if (exPreds == null) {
 				exPreds = Sets.newHashSet();
 			}

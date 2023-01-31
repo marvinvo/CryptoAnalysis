@@ -204,3 +204,7 @@ buildNumber.properties
 
 .flattened-pom.xml
 /shippable/testresults/
+*.temp
+*.json
+**/.DS_Store
+**/.icloud

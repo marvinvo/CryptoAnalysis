@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.stream.Collectors;
 import java.util.Set;
 
 import org.json.simple.JSONArray;
@@ -103,14 +104,23 @@ public class SARIFReporter extends Reporter {
 		return finalErrorType;
 	}
 
-	private void addResults(String errorType, SootClass c, String methodName, int lineNumber, String method, String statement, String text,
-			String richText) {
+	private void addResults(int errorID, String errorType, SootClass c, String methodName, int lineNumber, String method, String statement, String text,
+			String richText, List<Integer> preceding_error_ids, List<Integer> subsequent_error_ids) {
 		JSONObject result = new JSONObject();
 		String finalErrorType = addRules(errorType);
 		
+		result.put(SARIFConfig.Error_ID_KEY, errorID);
+		JSONArray preceding = new JSONArray();
+		preceding.addAll(preceding_error_ids);
+		JSONArray subsequent = new JSONArray();
+		subsequent.addAll(subsequent_error_ids);
+		result.put(SARIFConfig.Preceding_Errors_KEY, preceding);
+		result.put(SARIFConfig.Subsequent_Errors_KEY, subsequent);
+
 		result.put(SARIFConfig.RULE_ID_KEY, finalErrorType);
 		result.put(SARIFConfig.MESSAGE_KEY, this.sarifHelper.getMessage(text, richText));
 		result.put(SARIFConfig.LOCATIONS_KEY, this.sarifHelper.getLocations(c, methodName, lineNumber, method, statement));
+		
 		this.results.add(result);
 	}
 
@@ -153,7 +163,9 @@ public class SARIFReporter extends Reporter {
 					int lineNumber = marker.getErrorLocation().getUnit().get().getJavaSourceStartLineNumber();
 					String method = e.getKey().getSubSignature();
 					String statement = marker.getErrorLocation().getUnit().get().toString();
-					this.addResults(errorType, c, e.getKey().getName(), lineNumber, method, statement, text, richText);
+					List<Integer> preceding_error_ids = marker.getRootErrors().stream().map(err -> err.hashCode()).collect(Collectors.toList());
+					List<Integer> subsequent_error_ids = marker.getSubsequentErrors().stream().map(err -> err.hashCode()).collect(Collectors.toList());
+					this.addResults(marker.hashCode(), errorType, c, e.getKey().getName(), lineNumber, method, statement, text, richText, preceding_error_ids, subsequent_error_ids);
 				}
 			}
 		}

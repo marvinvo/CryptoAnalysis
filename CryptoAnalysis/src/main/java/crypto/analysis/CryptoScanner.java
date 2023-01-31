@@ -32,6 +32,7 @@ import typestate.TransitionFunction;
 
 public abstract class CryptoScanner {
 
+	private final CryptoScannerSettings settings;
 	private final LinkedList<IAnalysisSeed> worklist = Lists.newLinkedList();
 	private final List<ClassSpecification> specifications = Lists.newLinkedList();
 	private final PredicateHandler predicateHandler = new PredicateHandler(this);
@@ -61,11 +62,18 @@ public abstract class CryptoScanner {
 		return resultsAggregator;
 	};
 
+	public CryptoScanner(CryptoScannerSettings settings) {
+		this.settings = settings;
+		CrySLMethodToSootMethod.reset();
+	}
+	
 	public CryptoScanner() {
+		this.settings = new CryptoScannerSettings(); // this sets up default settings
 		CrySLMethodToSootMethod.reset();
 	}
 
 	public void scan(List<CrySLRule> specs) {
+		Stopwatch scanWatch = Stopwatch.createStarted();
 		int processedSeeds = 0;
 		for (CrySLRule rule : specs) {
 			specifications.add(new ClassSpecification(rule, this));
@@ -75,8 +83,10 @@ public abstract class CryptoScanner {
 		analysisWatch = Stopwatch.createStarted();
 		logger.info("Searching for seeds for the analysis!");
 		initialize();
-		long elapsed = analysisWatch.elapsed(TimeUnit.SECONDS);
-		logger.info("Discovered " + worklist.size() + " analysis seeds within " + elapsed + " seconds!");
+		long elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Discovered " + worklist.size() + " analysis seeds within " + elapsed + " ms!");
+		analysisWatch.reset();
+		analysisWatch.start();
 		while (!worklist.isEmpty()) {
 			IAnalysisSeed curr = worklist.poll();
 			listener.discoveredSeed(curr);
@@ -85,6 +95,12 @@ public abstract class CryptoScanner {
 			listener.addProgress(processedSeeds,worklist.size());
 			estimateAnalysisTime();
 		}
+		
+		
+		elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Analysis without predicate checks took " + elapsed + " ms!");
+		analysisWatch.reset();
+		analysisWatch.start();
 
 //		IDebugger<TypestateDomainValue<StateNode>> debugger = debugger();
 //		if (debugger instanceof CryptoVizDebugger) {
@@ -92,6 +108,10 @@ public abstract class CryptoScanner {
 //			ideVizDebugger.addEnsuredPredicates(this.existingPredicates);
 //		}
 		predicateHandler.checkPredicates();
+		
+		elapsed = analysisWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Predicate checks took " + elapsed + " ms!");
+		analysisWatch.reset();
 
 		for (AnalysisSeedWithSpecification seed : getAnalysisSeeds()) {
 			if (seed.isSecure()) {
@@ -99,10 +119,14 @@ public abstract class CryptoScanner {
 			}
 		}
 		
+		elapsed = scanWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Static Analysis took " + elapsed + " ms!");
+		scanWatch.reset();
+		scanWatch.start();
 		listener.afterAnalysis();
-		elapsed = analysisWatch.elapsed(TimeUnit.SECONDS);
-		logger.info("Static Analysis took " + elapsed + " seconds!");
-//		debugger().afterAnalysis();
+		elapsed = scanWatch.elapsed(TimeUnit.MILLISECONDS);
+		logger.info("Report took " + elapsed + " ms!");
+		scanWatch.reset();
 	}
 
 	private void estimateAnalysisTime() {
@@ -131,9 +155,6 @@ public abstract class CryptoScanner {
 			}
 			for (ClassSpecification spec : getClassSpecifictions()) {
 				spec.invokesForbiddenMethod(method);
-				if (spec.getRule().getClassName().equals("javax.crypto.SecretKey")) {
-					continue;
-				}
 				for (Query seed : spec.getInitialSeeds(method)) {
 					getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(this, seed.stmt(), seed.var(), spec));
 				}
@@ -181,5 +202,9 @@ public abstract class CryptoScanner {
 
 	public Collection<AnalysisSeedWithSpecification> getAnalysisSeeds() {
 		return this.seedsWithSpec.values();
+	}
+	
+	public CryptoScannerSettings getSettings() {
+		return this.settings;
 	}
 }

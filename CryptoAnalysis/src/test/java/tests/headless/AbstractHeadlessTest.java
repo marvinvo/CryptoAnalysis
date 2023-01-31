@@ -5,10 +5,14 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.After;
 import org.junit.Before;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -20,12 +24,12 @@ import boomerang.jimple.Statement;
 import boomerang.jimple.Val;
 import boomerang.results.ForwardBoomerangResults;
 import crypto.HeadlessCryptoScanner;
+import crypto.HeadlessCryptoScannerSettings.ReportFormat;
 import crypto.analysis.AnalysisSeedWithSpecification;
 import crypto.analysis.CrySLAnalysisListener;
 import crypto.analysis.CrySLRulesetSelector;
 import crypto.analysis.CrySLRulesetSelector.RuleFormat;
 import crypto.analysis.CrySLRulesetSelector.Ruleset;
-import crypto.analysis.CryptoScannerSettings.ReportFormat;
 import crypto.analysis.EnsuredCrySLPredicate;
 import crypto.analysis.IAnalysisSeed;
 import crypto.analysis.errors.AbstractError;
@@ -35,9 +39,11 @@ import crypto.extractparameter.ExtractedValue;
 import crypto.interfaces.ISLConstraint;
 import crypto.rules.CrySLPredicate;
 import crypto.rules.CrySLRule;
+import crypto.rules.CrySLRuleReader;
 import soot.G;
 import sync.pds.solver.nodes.Node;
 import test.IDEALCrossingTestingFramework;
+import test.UsagePatternTestingFramework;
 import tests.headless.FindingsType.FalseNegatives;
 import tests.headless.FindingsType.FalsePositives;
 import tests.headless.FindingsType.NoFalseNegatives;
@@ -205,7 +211,8 @@ public abstract class AbstractHeadlessTest {
 			public void beforeConstraintCheck(AnalysisSeedWithSpecification analysisSeedWithSpecification) {}
 
 			@Override
-			public void beforeAnalysis() {}
+			public void beforeAnalysis() {
+			}
 
 			@Override
 			public void afterPredicateCheck(AnalysisSeedWithSpecification analysisSeedWithSpecification) {}
@@ -214,7 +221,8 @@ public abstract class AbstractHeadlessTest {
 			public void afterConstraintCheck(AnalysisSeedWithSpecification analysisSeedWithSpecification) {}
 
 			@Override
-			public void afterAnalysis() {}
+			public void afterAnalysis() {
+			}
 
 			@Override
 			public void onSecureObjectFound(IAnalysisSeed analysisObject) {
@@ -229,7 +237,7 @@ public abstract class AbstractHeadlessTest {
 			}
 		};
 	}
-
+	
 	protected void assertErrors() {
 		for (Cell<String, Class<?>, Integer> c : errorMarkerCountPerErrorTypeAndMethod.cellSet()) {
 			Integer value = c.getValue();

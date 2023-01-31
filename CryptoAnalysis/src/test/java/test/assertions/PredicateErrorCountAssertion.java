@@ -24,5 +24,10 @@ public class PredicateErrorCountAssertion implements Assertion {
 	public boolean isImprecise() {
 		return expectedErrorCounts != actualErrorCounts;
 	}
+	
+	@Override
+	public String toString() {
+		return "expected " + expectedErrorCounts + " predicate errors, but got " + actualErrorCounts + ".";  
+	}
 
 }

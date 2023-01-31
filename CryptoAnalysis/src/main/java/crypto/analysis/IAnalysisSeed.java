@@ -3,11 +3,15 @@ package crypto.analysis;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 import java.util.Set;
+
+import com.google.common.collect.Lists;
 
 import boomerang.WeightedForwardQuery;
 import boomerang.jimple.Statement;
 import boomerang.jimple.Val;
+import crypto.analysis.errors.AbstractError;
 import crypto.predicates.PredicateHandler;
 import soot.SootMethod;
 import sync.pds.solver.nodes.Node;
@@ -17,12 +21,14 @@ public abstract class IAnalysisSeed extends WeightedForwardQuery<TransitionFunct
 
 	protected final CryptoScanner cryptoScanner;
 	protected final PredicateHandler predicateHandler;
+	protected final List<AbstractError> errorCollection;
 	private String objectId;
 
 	public IAnalysisSeed(CryptoScanner scanner, Statement stmt, Val fact, TransitionFunction func){
 		super(stmt,fact, func);
 		this.cryptoScanner = scanner;
 		this.predicateHandler = scanner.getPredicateHandler();
+		this.errorCollection = Lists.newArrayList();
 	}
 	abstract void execute();
 
@@ -43,6 +49,14 @@ public abstract class IAnalysisSeed extends WeightedForwardQuery<TransitionFunct
 		}
 		return this.objectId;
 		
+	}
+	
+	public void addError(AbstractError e) {
+		this.errorCollection.add(e);
+	}
+	
+	public List<AbstractError> getErrors(){
+		return Lists.newArrayList(errorCollection);
 	}
 	
 	public abstract Set<Node<Statement, Val>> getDataFlowPath();

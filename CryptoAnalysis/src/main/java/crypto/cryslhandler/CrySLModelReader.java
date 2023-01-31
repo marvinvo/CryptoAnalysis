@@ -1,5 +1,25 @@
 package crypto.cryslhandler;
 
+<<<<<<< HEAD
+=======
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+>>>>>>> origin/subsequenterrors
 import com.google.common.base.CharMatcher;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -29,15 +49,65 @@ import org.eclipse.xtext.common.types.access.impl.ClasspathTypeProvider;
 import org.eclipse.xtext.resource.XtextResource;
 import org.eclipse.xtext.resource.XtextResourceSet;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.AbstractMap.SimpleEntry;
-import java.util.*;
-import java.util.Map.Entry;
+
+import crypto.exceptions.CryptoAnalysisException;
+import crypto.interfaces.ICrySLPredicateParameter;
+import crypto.interfaces.ISLConstraint;
+import crypto.rules.CrySLArithmeticConstraint;
+import crypto.rules.CrySLArithmeticConstraint.ArithOp;
+import crypto.rules.CrySLComparisonConstraint;
+import crypto.rules.CrySLComparisonConstraint.CompOp;
+import crypto.rules.CrySLCondPredicate;
+import crypto.rules.CrySLConstraint;
+import crypto.rules.CrySLConstraint.LogOps;
+import crypto.rules.CrySLForbiddenMethod;
+import crypto.rules.CrySLMethod;
+import crypto.rules.CrySLObject;
+import crypto.rules.CrySLPredicate;
+import crypto.rules.CrySLRule;
+import crypto.rules.CrySLSplitter;
+import crypto.rules.CrySLValueConstraint;
+import crypto.rules.ParEqualsPredicate;
+import crypto.rules.StateMachineGraph;
+import crypto.rules.StateNode;
+import crypto.rules.TransitionEdge;
+import de.darmstadt.tu.crossing.CrySLStandaloneSetup;
+import de.darmstadt.tu.crossing.constraints.CrySLArithmeticOperator;
+import de.darmstadt.tu.crossing.constraints.CrySLComparisonOperator;
+import de.darmstadt.tu.crossing.constraints.CrySLLogicalOperator;
+import de.darmstadt.tu.crossing.crySL.ArithmeticExpression;
+import de.darmstadt.tu.crossing.crySL.ArithmeticOperator;
+import de.darmstadt.tu.crossing.crySL.ArrayElements;
+import de.darmstadt.tu.crossing.crySL.ComparingOperator;
+import de.darmstadt.tu.crossing.crySL.ComparisonExpression;
+import de.darmstadt.tu.crossing.crySL.Constraint;
+import de.darmstadt.tu.crossing.crySL.DestroysBlock;
+import de.darmstadt.tu.crossing.crySL.Domainmodel;
+import de.darmstadt.tu.crossing.crySL.EnsuresBlock;
+import de.darmstadt.tu.crossing.crySL.Event;
+import de.darmstadt.tu.crossing.crySL.Expression;
+import de.darmstadt.tu.crossing.crySL.ForbMethod;
+import de.darmstadt.tu.crossing.crySL.ForbiddenBlock;
+import de.darmstadt.tu.crossing.crySL.Literal;
+import de.darmstadt.tu.crossing.crySL.LiteralExpression;
+import de.darmstadt.tu.crossing.crySL.LogicalImply;
+import de.darmstadt.tu.crossing.crySL.LogicalOperator;
+import de.darmstadt.tu.crossing.crySL.Object;
+import de.darmstadt.tu.crossing.crySL.ObjectDecl;
+import de.darmstadt.tu.crossing.crySL.Order;
+import de.darmstadt.tu.crossing.crySL.PreDefinedPredicates;
+import de.darmstadt.tu.crossing.crySL.Pred;
+import de.darmstadt.tu.crossing.crySL.PredLit;
+import de.darmstadt.tu.crossing.crySL.ReqPred;
+import de.darmstadt.tu.crossing.crySL.RequiredBlock;
+import de.darmstadt.tu.crossing.crySL.SimpleOrder;
+import de.darmstadt.tu.crossing.crySL.SuPar;
+import de.darmstadt.tu.crossing.crySL.SuParList;
+import de.darmstadt.tu.crossing.crySL.SuperType;
+import de.darmstadt.tu.crossing.crySL.UnaryPreExpression;
+import de.darmstadt.tu.crossing.crySL.UseBlock;
+import de.darmstadt.tu.crossing.crySL.impl.DomainmodelImpl;
+import de.darmstadt.tu.crossing.crySL.impl.ObjectImpl;
 
 public class CrySLModelReader {
 
@@ -61,19 +131,19 @@ public class CrySLModelReader {
 		final Injector injector = crySLStandaloneSetup.createInjectorAndDoEMFRegistration();
 		this.resourceSet = injector.getInstance(XtextResourceSet.class);
 
-		String a = System.getProperty("java.class.path");
-		String[] l = a.split(";");
-
-		URL[] classpath = new URL[l.length];
-		for (int i = 0; i < classpath.length; i++) {
-			classpath[i] = new File(l[i]).toURI().toURL();
-		}
+		CrySLModelReaderClassPath.seal();
+		URL[] classpath = CrySLModelReaderClassPath.getClassPath().stream().map((it) -> {
+			try {
+				return it.toURL();
+			} catch (MalformedURLException e) {
+				throw new UncheckedIOException(e);
+			}
+		}).toArray(URL[]::new);
 
 		URLClassLoader ucl = new URLClassLoader(classpath);
 		this.resourceSet.setClasspathURIContext(new URLClassLoader(classpath));
 		new ClasspathTypeProvider(ucl, this.resourceSet, null, null);
 		this.resourceSet.addLoadOption(XtextResource.OPTION_RESOLVE_ALL, Boolean.TRUE);
-
 	}
 
 	/**
@@ -637,14 +707,20 @@ public class CrySLModelReader {
 	private CrySLPredicate extractReqPred(final ReqPred pred) {
 		final List<ICrySLPredicateParameter> variables = new ArrayList<>();
 		PredLit innerPred = (PredLit) pred;
+		
 		EObject cons = innerPred.getCons();
 		ISLConstraint conditional = null;
 		if (cons instanceof Constraint) {
 			conditional = getConstraint((Constraint) cons);
 		} else if (cons instanceof Pred) {
 			conditional = getPredicate((Pred) cons);
+			conditional = ((CrySLPredicate) conditional).setNegated(false);
+			// TODO: conditional cannot be negated by design, but will always be negated when pred is negated
+			
 		}
 		if (innerPred.getPred().getParList() != null) {
+			// TODO: add method to crysl supar that return, wether it is "this" or "_" or not
+			boolean isthis = innerPred.getPred().getParList().getParameters().size() != 1;
 			for (final SuPar var : innerPred.getPred().getParList().getParameters()) {
 				if (var.getVal() != null) {
 					final LiteralExpression lit = var.getVal();
@@ -673,8 +749,15 @@ public class CrySLModelReader {
 						}
 					}
 				} else {
-					variables.add(new CrySLObject(UNDERSCORE, NULL));
+					if(isthis) {
+						variables.add(new CrySLObject(THIS, NULL));
+					}
+					else {
+						variables.add(new CrySLObject(UNDERSCORE, NULL));
+					}
 				}
+				//this can only be at first position
+				isthis = false;
 			}
 		}
 		return new CrySLPredicate(null, innerPred.getPred().getPredName(), variables, (innerPred.getNot() != null ? true : false), conditional);
